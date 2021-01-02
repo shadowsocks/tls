@@ -1,0 +1,28 @@
+[package]
+name = "tls"
+version = "0.1.0"
+authors = ["luozijun <luozijun.assistant@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+log       = "0.4"
+rand      = "0.8"
+bitflags  = "1.2"
+punycode  = "0.4"
+
+# ed25519-dalek = "1.0"
+
+[dev-dependencies]
+# env_logger = { version = "0.8", default-features = false, features = ["termcolor", "atty", "humantime"] }
+
+
+[features]
+default = [
+    
+]
+
+[package.metadata.docs.rs]
+all-features = true
+# rustdoc-args = ["--cfg", "docsrs"]

@@ -1,0 +1,34 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+import os
+import sys
+import subprocess
+
+OPENSSL = "/usr/local/opt/openssl/bin/openssl"
+
+def run(args):
+    proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    proc.wait()
+    if proc.returncode != 0:
+        print(proc.stderr.read().decode("utf8"))
+        sys.exit()
+    stdout = list(proc.stdout.read())
+    print(stdout)
+    print("Len: %d" % len(stdout))
+
+def main():
+    args = sys.argv
+    if len(args) <= 1:
+        return None
+    
+    pemfile = args[1]
+    
+    # openssl rsa -inform PEM -outform DER -in server.key
+    # openssl x509 -inform PEM -outform DER -in root.crt -out root.der
+    cmd = [ OPENSSL, "x509", "-inform", "PEM", "-outform", "DER", "-in", pemfile ]
+    run(cmd)
+
+
+if __name__ == '__main__':
+    main()

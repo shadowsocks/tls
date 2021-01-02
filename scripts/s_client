@@ -1,0 +1,17 @@
+#!/bin/bash
+
+# -tls1_3
+# -no_ssl3 -no_tls1 -no_tls1_1 -no_tls1_2
+
+# -certform PEM -cert /Users/luozijun/Project/tls/keys/root.crt \
+# -bugs
+# -msg
+/usr/local/opt/openssl/bin/openssl s_client \
+    -chainCAfile /Users/luozijun/Project/tls/keys/ca.crt \
+    -chainCAfile /Users/luozijun/Project/tls/keys/root.crt \
+    -verifyCAfile /Users/luozijun/Project/tls/keys/root.crt \
+    -connect "127.0.0.1" -port 443 -servername "localhost" \
+    -alpn "h2,dot" \
+    -state \
+    -tls1_3 \
+    -debug -tlsextdebug -security_debug
