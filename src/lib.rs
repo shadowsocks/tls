@@ -20,4 +20,6 @@ pub mod error;
 pub mod wire;
 pub mod name;
 
-// pub mod handshake;
+pub mod handshake;
+
+pub mod x25519;
