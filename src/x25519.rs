@@ -55,13 +55,22 @@ pub struct X25519SecretKey {
 
 #[allow(clippy::new_without_default)]
 impl X25519SecretKey {
-    /// Generate a new secret key using the OS rng.
-    pub fn new() -> Self {
+    pub const KEY_LEN: usize = 32;
+    
+    // /// Generate a new secret key using the OS rng.
+    // pub fn new() -> Self {
+    //     let mut private_key = [0u8; 32];
+    //     rand::Rng::fill(&mut rand::rngs::OsRng, &mut private_key);
+    //     X25519SecretKey {
+    //         internal: private_key,
+    //     }
+    // }
+    
+    pub fn generate<T: rand::Rng + rand::CryptoRng>(csprng: &mut T) -> Self {
         let mut private_key = [0u8; 32];
-        rand::Rng::fill(&mut rand::rngs::OsRng, &mut private_key);
-        X25519SecretKey {
-            internal: private_key,
-        }
+        rand::Rng::fill(csprng, &mut private_key);
+
+        Self { internal: private_key }
     }
 
     /// Compute the public key for this secret key.
@@ -136,6 +145,8 @@ pub struct X25519PublicKey {
 }
 
 impl X25519PublicKey {
+    pub const KEY_LEN: usize = 32;
+
     // Check if this public key is equal to `other` in constant-time.
     pub fn constant_time_is_equal(&self, other: &X25519PublicKey) -> Result<(), InvalidKey> {
         constant_time_key_compare(&self.internal[..], &other.internal[..], true)

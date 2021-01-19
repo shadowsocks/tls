@@ -1,3 +1,5 @@
+use crate::error::{Error, ErrorKind};
+
 
 // TLS HandshakeType
 // https://www.iana.org/assignments/tls-parameters/tls-parameters.xhtml#tls-parameters-7
@@ -105,15 +107,25 @@ impl std::fmt::Display for CompressionMethod {
 pub struct Random(pub [u8; 32]);
 
 impl Random {
-    pub fn random() -> Self {
-        let mut thread_rng = rand::thread_rng();
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, Error> {
+        if bytes.len() != 32 {
+            return Err(Error::from(ErrorKind::DecodeError));
+        }
+
         let mut data = [0u8; 32];
-        rand::Rng::fill(&mut thread_rng, &mut data);
+        data.copy_from_slice(bytes);
+
+        Ok(Self(data))
+    }
+
+    pub fn generate<T: rand::Rng + rand::CryptoRng>(csprng: &mut T) -> Self {
+        let mut data = [0u8; 32];
+        rand::Rng::fill(csprng, &mut data);
 
         Self(data)
     }
 
-    pub fn random_with_timestamp() -> Self {
+    pub fn generate_with_timestamp<T: rand::Rng + rand::CryptoRng>(csprng: &mut T) -> Self {
         let now: u64 = match std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
             Ok(now) => now.as_secs(),
             Err(e) => panic!(e),
@@ -127,14 +139,13 @@ impl Random {
         data[2] = octes[2];
         data[3] = octes[3];
 
-        let mut thread_rng = rand::thread_rng();
-        rand::Rng::fill(&mut thread_rng, &mut data[4..]);
+        rand::Rng::fill(csprng, &mut data[4..]);
         
         Self(data)
     }
 
     // Used in TLS versions prior to 1.3.
-    pub fn gmt_unix_time(&self) -> u32 {
+    pub const fn gmt_unix_time(&self) -> u32 {
         u32::from_be_bytes([
             self.0[0], self.0[1], 
             self.0[2], self.0[3],
@@ -145,14 +156,63 @@ impl Random {
     pub fn random_bytes(&self) -> &[u8] {
         &self.0[4..]
     }
+
+    pub const fn as_bytes(&self) -> &[u8] {
+        &self.0
+    }
+
+    pub const fn to_be_bytes(self) -> [u8; 32] {
+        self.0
+    }
 }
 
-pub fn random_session_id() -> [u8; 32] {
-    let mut arr = [0u8; 32];
-    let mut thread_rng = rand::thread_rng();
-    rand::Rng::fill(&mut thread_rng, &mut arr);
-
-    arr
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SessionId {
+    data: [u8; 32],
+    len: u8,
 }
 
+impl SessionId {
+    pub const MAX_LEN: usize = 32;
 
+    pub fn generate<T: rand::Rng + rand::CryptoRng>(csprng: &mut T) -> Self {
+        let mut data = [0u8; Self::MAX_LEN];
+        rand::Rng::fill(csprng, &mut data);
+
+        Self { data, len: Self::MAX_LEN as u8 }
+    }
+
+    pub fn from_bytes(bytes: &[u8], len: u8) -> Result<Self, Error> {
+        if len > 32 || bytes.len() < len as usize {
+            return Err(Error::from(ErrorKind::DecodeError));
+        }
+
+        let mut data = [0u8; Self::MAX_LEN];
+        data[..len as usize].copy_from_slice(bytes);
+
+        Ok(Self { data, len })
+    }
+
+    pub fn len(&self) -> u8 {
+        self.len
+    }
+
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.data[..self.len as usize]
+    }
+}
+
+impl Default for Random {
+    fn default() -> Self {
+        Self([0u8; 32])
+    }
+}
+
+impl Default for SessionId {
+    fn default() -> Self {
+        Self {
+            data: [0u8; Self::MAX_LEN],
+            len: Self::MAX_LEN as u8,
+        }
+    }
+}
