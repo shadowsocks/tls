@@ -167,6 +167,12 @@ impl<'a> From<&'a [u8]> for X25519PublicKey {
     }
 }
 
+impl Default for X25519PublicKey {
+    fn default() -> Self {
+        Self { internal: [0u8; Self::KEY_LEN] }
+    }
+}
+
 impl Drop for X25519PublicKey {
     fn drop(&mut self) {
         // Force zero out of the memory on Drop
