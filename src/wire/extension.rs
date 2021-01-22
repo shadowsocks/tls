@@ -1,7 +1,7 @@
 use super::ProtocolVersion;
 
 use std::convert::TryFrom;
-use std::io::{self, Read, Write};
+use std::io::{self, Read, Write, Seek, SeekFrom};
 
 
 // 4.2.  Extensions
@@ -704,169 +704,24 @@ impl std::fmt::Display for ApplicationLayerProtocol<&Vec<u8>> {
     }
 }
 
+// pub fn write_ext_psk_key_exchange_modes<W: Write + Seek>(cursor: &mut W, psk_key_exchange_modes: &[PskKeyExchangeMode]) -> Result<(), io::Error> {
+//     // Extension: PSK_KEY_EXCHANGE_MODES
+//     // https://tools.ietf.org/html/rfc8446#section-4.2.9
+//     if psk_key_exchange_modes.is_empty() {
+//         return Err(io::Error::new(io::ErrorKind::Other, "payload size limit."));
+//     }
 
-pub fn write_ext_client_supported_versions(cursor: &mut io::Cursor<Vec<u8>>, versions: &[ProtocolVersion]) -> Result<(), io::Error> {
-    // Extension: Supported Versions
-    // https://tools.ietf.org/html/rfc8446#section-4.2.1
-    if versions.is_empty() {
-        return Err(io::Error::new(io::ErrorKind::Other, "payload size limit."));
-    }
-    cursor.write_all(&ExtensionKind::SUPPORTED_VERSIONS.0.to_be_bytes())?; // ExtensionKind
+//     cursor.write_all(&ExtensionKind::PSK_KEY_EXCHANGE_MODES.0.to_be_bytes())?; // ExtensionKind
+//     transaction!(cursor, u16, 2, 0, 65535, {
+//         transaction!(cursor, u8, 1, 1, 255, {
+//             for psk_key_exchange_mode in psk_key_exchange_modes.iter() {
+//                 cursor.write_all(&[psk_key_exchange_mode.0])?;
+//             }
+//         });
+//     });
 
-    transaction!(cursor, u16, 2, 0, 65535, {
-        transaction!(cursor, u8, 1, 2, 255, {
-            for version in versions.iter() {
-                cursor.write_all(&version.to_be_bytes())?;
-            }
-        });
-    });
-
-    Ok(())
-}
-pub fn write_ext_server_supported_version(cursor: &mut io::Cursor<Vec<u8>>, version: ProtocolVersion) -> Result<(), io::Error> {
-    // Extension: Supported Versions
-    // https://tools.ietf.org/html/rfc8446#section-4.2.1
-    cursor.write_all(&ExtensionKind::SUPPORTED_VERSIONS.0.to_be_bytes())?; // ExtensionKind
-
-    transaction!(cursor, u16, 2, 0, 65535, {
-        cursor.write_all(&version.to_be_bytes())?;
-    });
-
-    Ok(())
-}
-
-fn write_ext_server_name(cursor: &mut io::Cursor<Vec<u8>>, server_name: &str) -> Result<(), io::Error> {
-    let len = u16::try_from(server_name.len()).map_err(|_| io::Error::new(io::ErrorKind::Other, "payload size limit."))?;
-    assert!(len > 0);
-
-    cursor.write_all(&[ServerNameKind::HOST_NAME.0])?;
-    cursor.write_all(&len.to_be_bytes())?;
-    cursor.write_all(server_name.as_bytes())
-}
-pub fn write_ext_server_names(cursor: &mut io::Cursor<Vec<u8>>, server_names: &[&str]) -> Result<(), io::Error> {
-    // Extension: ServerName
-    // https://tools.ietf.org/html/rfc6066#section-3
-    // 
-    // TODO: HostName 的编码是 ASCII 编码，不是 UTF-8 编码。
-    //       所以针对国际化的域名，可能需要经过 PunnyCode 编码后再使用。
-    //       目前，这里不做处理。
-    if server_names.is_empty() {
-        return Err(io::Error::new(io::ErrorKind::Other, "payload size limit."));
-    }
-    cursor.write_all(&ExtensionKind::SERVER_NAME.0.to_be_bytes())?; // ExtensionKind
-
-    transaction!(cursor, u16, 2, 0, 65535, {
-        transaction!(cursor, u16, 2, 4, 65535, {
-            for server_name in server_names.iter() {
-                write_ext_server_name(cursor, server_name)?;
-            }
-        });
-    });
-
-    Ok(())
-}
-
-fn write_ext_application_proto(cursor: &mut io::Cursor<Vec<u8>>, application_proto: &[u8]) -> Result<(), io::Error> {
-    let len = u8::try_from(application_proto.len()).map_err(|_| io::Error::new(io::ErrorKind::Other, "payload size limit."))?;
-    assert!(len > 0);
-
-    cursor.write_all(&[len])?;
-    cursor.write_all(application_proto)
-}
-pub fn write_ext_application_protos(cursor: &mut io::Cursor<Vec<u8>>, application_protos: &[&[u8]]) -> Result<(), io::Error> {
-    // Extension: Application-Layer Protocol Negotiation Extension
-    // https://tools.ietf.org/html/rfc7301#section-3.1
-    if application_protos.is_empty() {
-        return Err(io::Error::new(io::ErrorKind::Other, "payload size limit."));
-    }
-
-    cursor.write_all(&ExtensionKind::APPLICATION_LAYER_PROTOCOL_NEGOTIATION.0.to_be_bytes())?; // ExtensionKind
-    transaction!(cursor, u16, 2, 0, 65535, {
-        transaction!(cursor, u16, 2, 2, 65535, {
-            for application_proto in application_protos.iter() {
-                write_ext_application_proto(cursor, application_proto)?;
-            }
-        });
-    });
-
-    Ok(())
-}
-
-pub fn write_ext_supported_groups(cursor: &mut io::Cursor<Vec<u8>>, supported_groups: &[SupportedGroup]) -> Result<(), io::Error> {
-    // Extension: SUPPORTED_GROUPS
-    // https://tools.ietf.org/html/rfc8446#section-4.2.7
-    if supported_groups.is_empty() {
-        return Err(io::Error::new(io::ErrorKind::Other, "payload size limit."));
-    }
-
-    cursor.write_all(&ExtensionKind::SUPPORTED_GROUPS.0.to_be_bytes())?; // ExtensionKind
-    transaction!(cursor, u16, 2, 0, 65535, {
-        transaction!(cursor, u16, 2, 2, 65535, {
-            for group in supported_groups.iter() {
-                cursor.write_all(&group.to_be_bytes())?;
-            }
-        });
-    });
-
-    Ok(())
-}
-
-pub fn write_ext_signature_algorithms(cursor: &mut io::Cursor<Vec<u8>>, signature_algorithms: &[SignatureScheme]) -> Result<(), io::Error> {
-    // Extension: SIGNATURE_ALGORITHMS
-    // https://tools.ietf.org/html/rfc8446#section-4.2.3
-    if signature_algorithms.is_empty() {
-        return Err(io::Error::new(io::ErrorKind::Other, "payload size limit."));
-    }
-
-    cursor.write_all(&ExtensionKind::SIGNATURE_ALGORITHMS.0.to_be_bytes())?; // ExtensionKind
-    transaction!(cursor, u16, 2, 0, 65535, {
-        transaction!(cursor, u16, 2, 2, 65535, {
-            for signature_algorithm in signature_algorithms.iter() {
-                cursor.write_all(&signature_algorithm.to_be_bytes())?; // u16
-            }
-        });
-    });
-
-    Ok(())
-}
-
-pub fn write_ext_ec_point_foramts(cursor: &mut io::Cursor<Vec<u8>>, ec_point_foramts: &[ECPointFormat]) -> Result<(), io::Error> {
-    // Extension: EC_POINT_FORMATS
-    // https://tools.ietf.org/html/rfc8422#section-5.1.2
-    if ec_point_foramts.is_empty() {
-        return Err(io::Error::new(io::ErrorKind::Other, "payload size limit."));
-    }
-
-    cursor.write_all(&ExtensionKind::EC_POINT_FORMATS.0.to_be_bytes())?; // ExtensionKind
-    transaction!(cursor, u16, 2, 0, 65535, {
-        transaction!(cursor, u8, 1, 1, 255, {
-            for ec_point_foramt in ec_point_foramts.iter() {
-                cursor.write_all(&[ec_point_foramt.0])?;
-            }
-        });
-    });
-
-    Ok(())
-}
-
-pub fn write_ext_psk_key_exchange_modes(cursor: &mut io::Cursor<Vec<u8>>, psk_key_exchange_modes: &[PskKeyExchangeMode]) -> Result<(), io::Error> {
-    // Extension: PSK_KEY_EXCHANGE_MODES
-    // https://tools.ietf.org/html/rfc8446#section-4.2.9
-    if psk_key_exchange_modes.is_empty() {
-        return Err(io::Error::new(io::ErrorKind::Other, "payload size limit."));
-    }
-
-    cursor.write_all(&ExtensionKind::PSK_KEY_EXCHANGE_MODES.0.to_be_bytes())?; // ExtensionKind
-    transaction!(cursor, u16, 2, 0, 65535, {
-        transaction!(cursor, u8, 1, 1, 255, {
-            for psk_key_exchange_mode in psk_key_exchange_modes.iter() {
-                cursor.write_all(&[psk_key_exchange_mode.0])?;
-            }
-        });
-    });
-
-    Ok(())
-}
+//     Ok(())
+// }
 
 
 // 4.2.8.  Key Share
@@ -877,62 +732,62 @@ pub struct KeyShareEntry<T: AsRef<[u8]>> {
     pub key: T
 }
 
-// struct {
-//     NamedGroup group;
-//     opaque key_exchange<1..2^16-1>;
-// } KeyShareEntry;
-// struct {
-//     KeyShareEntry client_shares<0..2^16-1>;
-// } KeyShareClientHello;
-// struct {
-//     KeyShareEntry server_share;
-// } KeyShareServerHello;
-// struct {
-//     NamedGroup selected_group;
-// } KeyShareHelloRetryRequest;
-fn write_ext_key_share<T: AsRef<[u8]>>(cursor: &mut io::Cursor<Vec<u8>>, key_share: &KeyShareEntry<T>) -> Result<(), io::Error> {
-    // 5.  The X25519 and X448 Functions (密钥的生成)
-    // https://tools.ietf.org/html/rfc7748#section-5
-    let key_exchange = key_share.key.as_ref();
-    let all_zero = key_exchange.iter().all(|&n| n == 0);
-    if all_zero {
-        // NOTE: 密钥不能为全零
-        return Err(io::Error::new(io::ErrorKind::Other, "all zero."));
-    }
-    let key_exchange_len = key_exchange.len();
-    // <1..2^16-1>
-    let key_exchange_len = u16::try_from(key_exchange_len).map_err(|_| io::Error::new(io::ErrorKind::Other, "payload size limit."))?;
+// // struct {
+// //     NamedGroup group;
+// //     opaque key_exchange<1..2^16-1>;
+// // } KeyShareEntry;
+// // struct {
+// //     KeyShareEntry client_shares<0..2^16-1>;
+// // } KeyShareClientHello;
+// // struct {
+// //     KeyShareEntry server_share;
+// // } KeyShareServerHello;
+// // struct {
+// //     NamedGroup selected_group;
+// fn write_ext_key_share<T: AsRef<[u8]>, W: Write + Seek>(cursor: &mut W, key_share: &KeyShareEntry<T>) -> Result<(), io::Error> {
+//     // 5.  The X25519 and X448 Functions (密钥的生成)
+//     // https://tools.ietf.org/html/rfc7748#section-5
+//     let key_exchange = key_share.key.as_ref();
+//     let all_zero = key_exchange.iter().all(|&n| n == 0);
+// // } KeyShareHelloRetryRequest;
+//     if all_zero {
+//         // NOTE: 密钥不能为全零
+//         return Err(io::Error::new(io::ErrorKind::Other, "all zero."));
+//     }
+//     let key_exchange_len = key_exchange.len();
+//     // <1..2^16-1>
+//     let key_exchange_len = u16::try_from(key_exchange_len).map_err(|_| io::Error::new(io::ErrorKind::Other, "payload size limit."))?;
     
-    cursor.write_all(&key_share.group.to_be_bytes())?;
-    cursor.write_all(&key_exchange_len.to_be_bytes())?;
-    cursor.write_all(key_exchange)
-}
-pub fn write_ext_client_key_shares<T: AsRef<[u8]>>(cursor: &mut io::Cursor<Vec<u8>>, key_shares: &[KeyShareEntry<T>]) -> Result<(), io::Error> {
-    // Extension: KEY_SHARE
-    // https://tools.ietf.org/html/rfc8446#section-4.2.8
-    if key_shares.is_empty() {
-        return Err(io::Error::new(io::ErrorKind::Other, "payload size limit."));
-    }
+//     cursor.write_all(&key_share.group.to_be_bytes())?;
+//     cursor.write_all(&key_exchange_len.to_be_bytes())?;
+//     cursor.write_all(key_exchange)
+// }
+// pub fn write_ext_client_key_shares<T: AsRef<[u8]>, W: Write + Seek>(cursor: &mut W, key_shares: &[KeyShareEntry<T>]) -> Result<(), io::Error> {
+//     // Extension: KEY_SHARE
+//     // https://tools.ietf.org/html/rfc8446#section-4.2.8
+//     if key_shares.is_empty() {
+//         return Err(io::Error::new(io::ErrorKind::Other, "payload size limit."));
+//     }
 
-    cursor.write_all(&ExtensionKind::KEY_SHARE.0.to_be_bytes())?; // ExtensionKind
-    transaction!(cursor, u16, 2, 0, 65535, {
-        transaction!(cursor, u16, 2, 36, 65535, {
-            for key_share in key_shares.iter() {
-                write_ext_key_share(cursor, key_share)?;
-            }
-        });
-    });
+//     cursor.write_all(&ExtensionKind::KEY_SHARE.0.to_be_bytes())?; // ExtensionKind
+//     transaction!(cursor, u16, 2, 0, 65535, {
+//         transaction!(cursor, u16, 2, 36, 65535, {
+//             for key_share in key_shares.iter() {
+//                 write_ext_key_share(cursor, key_share)?;
+//             }
+//         });
+//     });
 
-    Ok(())
-}
-pub fn write_ext_server_key_share<T: AsRef<[u8]>>(cursor: &mut io::Cursor<Vec<u8>>, key_share: &KeyShareEntry<T>) -> Result<(), io::Error> {
-    cursor.write_all(&ExtensionKind::KEY_SHARE.0.to_be_bytes())?; // ExtensionKind
-    transaction!(cursor, u16, 2, 0, 65535, {
-        write_ext_key_share(cursor, key_share)?;
-    });
+//     Ok(())
+// }
+// pub fn write_ext_server_key_share<T: AsRef<[u8]>, W: Write + Seek>(cursor: &mut W, key_share: &KeyShareEntry<T>) -> Result<(), io::Error> {
+//     cursor.write_all(&ExtensionKind::KEY_SHARE.0.to_be_bytes())?; // ExtensionKind
+//     transaction!(cursor, u16, 2, 0, 65535, {
+//         write_ext_key_share(cursor, key_share)?;
+//     });
 
-    Ok(())
-}
+//     Ok(())
+// }
 
 // | server_name [RFC6066]                            |      CH, EE |
 // | max_fragment_length [RFC6066]                    |      CH, EE |

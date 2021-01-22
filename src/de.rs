@@ -1,7 +1,6 @@
 use crate::wire::*;
 use crate::error::{Error, ErrorKind};
 
-use std::ops::FnMut;
 use std::convert::TryFrom;
 use std::ops::RangeInclusive;
 use std::io::{self, Read, Write};
@@ -10,6 +9,22 @@ use std::io::{self, Read, Write};
 pub trait Deserialize: Sized {
     fn deserialize<T: AsRef<[u8]>>(deserializer: &mut Deserializer<T>) -> Result<Self, Error>;
 }
+
+macro_rules! primitive_impl {
+    ($ty:ident, $method:ident) => {
+        impl Deserialize for $ty {
+            #[inline]
+            fn deserialize<T: AsRef<[u8]>>(deserializer: &mut Deserializer<T>) -> Result<Self, Error> {
+                deserializer.$method()
+            }
+        }
+    }
+}
+
+primitive_impl!(u8, deserialize_u8);
+primitive_impl!(u16, deserialize_u16);
+primitive_impl!(u32, deserialize_u32);
+
 
 pub struct Deserializer<T> {
     inner: T,
@@ -88,7 +103,7 @@ impl<T: AsRef<[u8]>> Deserializer<T> {
         if amt > self.remainder_len() {
             return Err(Error::new(ErrorKind::InternalError, "failed to fill whole buffer"));
         }
-        
+
         let buf   = self.inner.as_ref();
         let start = self.pos;
         let end   = start + amt;
@@ -98,7 +113,7 @@ impl<T: AsRef<[u8]>> Deserializer<T> {
         Ok(&buf[start..end])
     }
 
-    pub fn deserialize_len_value<F: FnOnce(&mut Deserializer<&[u8]>) -> Result<(), Error>>(&mut self, num_len_octets: usize, min_len: usize, max_len: usize, serialize_fn: F) -> Result<usize, Error> {
+    pub fn deserialize_len_value<F: FnOnce(&mut Deserializer<&[u8]>) -> Result<(), Error>>(&mut self, num_len_octets: usize, min_len: usize, max_len: usize, deserialize_fn: F) -> Result<usize, Error> {
         let len_octets = match num_len_octets {
             1 => usize::try_from(self.deserialize_u8()?).unwrap(),
             2 => usize::try_from(self.deserialize_u16()?).unwrap(),
@@ -110,17 +125,17 @@ impl<T: AsRef<[u8]>> Deserializer<T> {
         let payload = self.deserialize_bytes(len_octets)?;
 
         let mut deserializer = Deserializer::new(payload);
-        serialize_fn(&mut deserializer)?;
-        
+        deserialize_fn(&mut deserializer)?;
+
         let remainder_len = deserializer.remainder_len();
         if remainder_len > 0 {
             trace!("[Deserializer] {} bytes droped.", remainder_len);
         }
-        
+
         Ok(len_octets)
     }
 
-    pub fn deserialize_vector<F: FnOnce(&mut Deserializer<&[u8]>) -> Result<(), Error>>(&mut self, len_range: RangeInclusive<usize>, serialize_fn: F) -> Result<usize, Error> {
+    pub fn deserialize_vector<F: FnOnce(&mut Deserializer<&[u8]>) -> Result<(), Error>>(&mut self, len_range: RangeInclusive<usize>, deserialize_fn: F) -> Result<usize, Error> {
         const U8_MAX: usize  = u8::MAX as usize;
         const U16_MAX: usize = u16::MAX as usize;
         const U24_MAX: usize = 16777215; // 2 ** 24 - 1
@@ -145,15 +160,55 @@ impl<T: AsRef<[u8]>> Deserializer<T> {
             _ => unreachable!("Oops ?"),
         };
 
-        self.deserialize_len_value(num_len_octets, min_len, max_len, serialize_fn)
+        self.deserialize_len_value(num_len_octets, min_len, max_len, deserialize_fn)
     }
+
+    pub fn deserialize_many<F: FnOnce(&mut Deserializer<T>) -> Result<(), Error>>(&mut self, deserialize_fn: F) -> Result<usize, Error> {
+        let start = self.pos;
+        
+        deserialize_fn(self)?;
+
+        let end = self.pos;
+        let amt = end - start;
+
+        Ok(amt)
+    }
+}
+
+
+pub fn deserialize<T: AsRef<[u8]>, V: Deserialize>(deserializer: &mut Deserializer<T>) -> Result<V, Error> {
+    V::deserialize(deserializer)
+}
+    
+pub fn read_tls_plaintext_record<T: AsMut<[u8]> + AsRef<[u8]>, F: FnOnce(&mut Deserializer<&[u8]>, ContentKind, ProtocolVersion) -> Result<(), Error>>(deserializer: &mut Deserializer<T>, deserialize_fn: F) -> Result<usize, Error> {
+    // 5.1.  Record Layer
+    // https://tools.ietf.org/html/rfc8446#section-5.1
+    // struct {
+    //     ContentType type;
+    //     ProtocolVersion legacy_record_version;
+    //     uint16 length;
+    //     opaque fragment[TLSPlaintext.length];
+    // } TLSPlaintext;
+    deserializer.deserialize_many(|deserializer| {
+        let bytes = deserializer.deserialize_bytes(3)?;
+        let kind = ContentKind(bytes[0]);
+        let version = ProtocolVersion { major: bytes[1], minor: bytes[2] };
+
+        deserializer.deserialize_vector(0..=u16::MAX as usize, |deserializer| {
+            deserialize_fn(deserializer, kind, version)?;
+
+            Ok(())
+        })?;
+
+        Ok(())
+    })
 }
 
 
 fn de_example() -> Result<(), Box<dyn std::error::Error>> {
     let buffer = vec![0u8; 4096];
     let mut deserializer = Deserializer::new(&buffer);
-    
+
     let bytes = deserializer.deserialize_bytes(10)?;
 
     let amt = deserializer.deserialize_vector(0..=32, |deserializer| {

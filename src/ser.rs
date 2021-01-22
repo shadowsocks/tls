@@ -1,7 +1,6 @@
 use crate::wire::*;
 use crate::error::{Error, ErrorKind};
 
-use std::ops::FnMut;
 use std::convert::TryFrom;
 use std::ops::RangeInclusive;
 use std::io::{self, Read, Write};
@@ -91,11 +90,11 @@ impl<T: AsMut<[u8]> + AsRef<[u8]>> Serializer<T> {
 
     pub fn serialize_bytes(&mut self, v: &[u8]) -> Result<usize, Error> {
         let amt = v.len();
-        
+
         if amt > self.remainder_len() {
             return Err(Error::new(ErrorKind::InternalError, "failed to write whole buffer"));
         }
-        
+
         let buf   = self.inner.as_mut();
         let start = self.pos;
         let end   = start + amt;
@@ -170,7 +169,7 @@ impl<T: AsMut<[u8]> + AsRef<[u8]>> Serializer<T> {
         self.serialize_len_value(num_len_octets, min_len, max_len, serialize_fn)
     }
 
-    pub fn serialize_with<F: FnOnce(&mut Serializer<T>) -> Result<(), Error>>(&mut self, serialize_fn: F) -> Result<usize, Error> {
+    pub fn serialize_many<F: FnOnce(&mut Serializer<T>) -> Result<(), Error>>(&mut self, serialize_fn: F) -> Result<usize, Error> {
         let start = self.pos;
         
         serialize_fn(self)?;
@@ -187,7 +186,7 @@ pub fn serialize<T: AsMut<[u8]> + AsRef<[u8]>, V: Serialize>(serializer: &mut Se
     val.serialize(serializer)
 }
     
-pub fn write_tls_plaintext_record<T: AsMut<[u8]> + AsRef<[u8]>, F: FnMut(&mut Serializer<T>) -> Result<(), Error>>(serializer: &mut Serializer<T>, kind: ContentKind, version: ProtocolVersion, serialize_fn: F) -> Result<usize, Error> {
+pub fn write_tls_plaintext_record<T: AsMut<[u8]> + AsRef<[u8]>, F: FnOnce(&mut Serializer<T>) -> Result<(), Error>>(serializer: &mut Serializer<T>, kind: ContentKind, version: ProtocolVersion, serialize_fn: F) -> Result<usize, Error> {
     // 5.1.  Record Layer
     // https://tools.ietf.org/html/rfc8446#section-5.1
     // struct {
@@ -196,7 +195,7 @@ pub fn write_tls_plaintext_record<T: AsMut<[u8]> + AsRef<[u8]>, F: FnMut(&mut Se
     //     uint16 length;
     //     opaque fragment[TLSPlaintext.length];
     // } TLSPlaintext;
-    serializer.serialize_with(|serializer| {
+    serializer.serialize_many(|serializer| {
         serializer.serialize_bytes(&[
             kind.0, version.major, version.minor,
         ])?;
