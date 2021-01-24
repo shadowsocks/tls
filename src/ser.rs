@@ -1,20 +1,19 @@
 use crate::wire::*;
 use crate::error::{Error, ErrorKind};
 
-use std::convert::TryFrom;
-use std::ops::RangeInclusive;
-use std::io::{self, Read, Write};
+use core::convert::TryFrom;
+use core::ops::RangeInclusive;
 
 
 pub trait Serialize {
-    fn serialize<T: AsMut<[u8]> + AsRef<[u8]>>(&self, serializer: &mut Serializer<T>) -> Result<usize, Error>;
+    fn serialize<T: AsMut<[u8]> + AsRef<[u8]>>(&self, serializer: &mut Serializer<T>) -> Result<(), Error>;
 }
 
 macro_rules! primitive_impl {
     ($ty:ident, $method:ident) => {
         impl Serialize for $ty {
             #[inline]
-            fn serialize<T: AsMut<[u8]> + AsRef<[u8]>>(&self, serializer: &mut Serializer<T>) -> Result<usize, Error> {
+            fn serialize<T: AsMut<[u8]> + AsRef<[u8]>>(&self, serializer: &mut Serializer<T>) -> Result<(), Error> {
                 serializer.$method(*self)
             }
         }
@@ -24,8 +23,6 @@ macro_rules! primitive_impl {
 primitive_impl!(u8, serialize_u8);
 primitive_impl!(u16, serialize_u16);
 primitive_impl!(u32, serialize_u32);
-primitive_impl!(u64, serialize_u64);
-primitive_impl!(usize, serialize_usize);
 
 
 pub struct Serializer<T> {
@@ -68,45 +65,28 @@ impl<T: AsMut<[u8]> + AsRef<[u8]>> Serializer<T> {
         self.buf_len() - self.pos
     }
 
-    pub fn serialize_u8(&mut self, v: u8) -> Result<usize, Error> {
-        self.serialize_bytes(&[v])
+    pub fn serialize_u8(&mut self, v: u8) -> Result<(), Error> {
+        self.serialize_slice(&[v])
     }
 
-    pub fn serialize_u16(&mut self, v: u16) -> Result<usize, Error> {
-        self.serialize_bytes(&v.to_be_bytes())
+    pub fn serialize_u16(&mut self, v: u16) -> Result<(), Error> {
+        self.serialize_slice(&v.to_be_bytes())
     }
 
-    pub fn serialize_u32(&mut self, v: u32) -> Result<usize, Error> {
-        self.serialize_bytes(&v.to_be_bytes())
+    pub fn serialize_u24(&mut self, v: u32) -> Result<(), Error> {
+        const U24_MAX: u32 = 16777215; // 2 ** 24 - 1
+        
+        debug_assert!(v <= U24_MAX);
+
+        self.serialize_slice(&v.to_be_bytes()[1..])
     }
 
-    pub fn serialize_u64(&mut self, v: u64) -> Result<usize, Error> {
-        self.serialize_bytes(&v.to_be_bytes())
+    pub fn serialize_u32(&mut self, v: u32) -> Result<(), Error> {
+        self.serialize_slice(&v.to_be_bytes())
     }
 
-    pub fn serialize_usize(&mut self, v: usize) -> Result<usize, Error> {
-        self.serialize_bytes(&v.to_be_bytes())
-    }
-
-    pub fn serialize_bytes(&mut self, v: &[u8]) -> Result<usize, Error> {
-        let amt = v.len();
-
-        if amt > self.remainder_len() {
-            return Err(Error::new(ErrorKind::InternalError, "failed to write whole buffer"));
-        }
-
-        let buf   = self.inner.as_mut();
-        let start = self.pos;
-        let end   = start + amt;
-
-        buf[start..end].copy_from_slice(v);
-
-        self.pos += amt;
-
-        Ok(amt)
-    }
-
-    pub fn serialize_len_value<F: FnOnce(&mut Serializer<T>) -> Result<(), Error>>(&mut self, num_len_octets: usize, min_len: usize, max_len: usize, serialize_fn: F) -> Result<usize, Error> {
+    #[inline]
+    fn serialize_len_value<F: FnOnce(&mut Serializer<T>) -> Result<(), Error>>(&mut self, num_len_octets: usize, min_len: usize, max_len: usize, serialize_fn: F) -> Result<(), Error> {
         if num_len_octets > self.remainder_len() {
             return Err(Error::new(ErrorKind::InternalError, "failed to write whole buffer"));
         }
@@ -135,13 +115,13 @@ impl<T: AsMut<[u8]> + AsRef<[u8]>> Serializer<T> {
         // NOTE: 返回填充 LEN 字段。
         buf[len_pos..len_pos + num_len_octets].copy_from_slice(len_octets);
 
-        Ok(amt + num_len_octets)
+        Ok(())
     }
 
     // NOTE: <2..2^16-2>
     //       <1..2^8-1>
     //       <0..32>
-    pub fn serialize_vector<F: FnOnce(&mut Serializer<T>) -> Result<(), Error>>(&mut self, len_range: RangeInclusive<usize>, serialize_fn: F) -> Result<usize, Error> {
+    pub fn serialize_vector<F: FnOnce(&mut Serializer<T>) -> Result<(), Error>>(&mut self, len_range: RangeInclusive<usize>, serialize_fn: F) -> Result<(), Error> {
         const U8_MAX: usize  = u8::MAX as usize;
         const U16_MAX: usize = u16::MAX as usize;
         const U24_MAX: usize = 16777215; // 2 ** 24 - 1
@@ -169,7 +149,26 @@ impl<T: AsMut<[u8]> + AsRef<[u8]>> Serializer<T> {
         self.serialize_len_value(num_len_octets, min_len, max_len, serialize_fn)
     }
 
-    pub fn serialize_many<F: FnOnce(&mut Serializer<T>) -> Result<(), Error>>(&mut self, serialize_fn: F) -> Result<usize, Error> {
+    pub fn serialize_slice(&mut self, v: &[u8]) -> Result<(), Error> {
+        let amt = v.len();
+
+        if amt > self.remainder_len() {
+            return Err(Error::new(ErrorKind::InternalError, "failed to write whole buffer"));
+        }
+
+        let buf   = self.inner.as_mut();
+        let start = self.pos;
+        let end   = start + amt;
+
+        buf[start..end].copy_from_slice(v);
+
+        self.pos += amt;
+
+        // Ok(amt)
+        Ok(())
+    }
+
+    pub fn serialize_many_with<F: FnOnce(&mut Serializer<T>) -> Result<(), Error>>(&mut self, serialize_fn: F) -> Result<usize, Error> {
         let start = self.pos;
         
         serialize_fn(self)?;
@@ -179,49 +178,52 @@ impl<T: AsMut<[u8]> + AsRef<[u8]>> Serializer<T> {
 
         Ok(amt)
     }
+
+    pub fn serialize<V: Serialize>(&mut self, val: &V) -> Result<(), Error> {
+        val.serialize(self)
+    }
 }
 
 
-pub fn serialize<T: AsMut<[u8]> + AsRef<[u8]>, V: Serialize>(serializer: &mut Serializer<T>, val: V) -> Result<usize, Error> {
-    val.serialize(serializer)
-}
-    
-pub fn write_tls_plaintext_record<T: AsMut<[u8]> + AsRef<[u8]>, F: FnOnce(&mut Serializer<T>) -> Result<(), Error>>(serializer: &mut Serializer<T>, kind: ContentKind, version: ProtocolVersion, serialize_fn: F) -> Result<usize, Error> {
-    // 5.1.  Record Layer
-    // https://tools.ietf.org/html/rfc8446#section-5.1
-    // struct {
-    //     ContentType type;
-    //     ProtocolVersion legacy_record_version;
-    //     uint16 length;
-    //     opaque fragment[TLSPlaintext.length];
-    // } TLSPlaintext;
-    serializer.serialize_many(|serializer| {
-        serializer.serialize_bytes(&[
-            kind.0, version.major, version.minor,
-        ])?;
-        serializer.serialize_vector(0..=u16::MAX as usize, serialize_fn)?;
-
-        Ok(())
-    })
+macro_rules! wrap_impl {
+    ($ty:ident, $method:ident) => {
+        impl Serialize for $ty {
+            #[inline]
+            fn serialize<T: AsMut<[u8]> + AsRef<[u8]>>(&self, serializer: &mut Serializer<T>) -> Result<(), Error> {
+                serializer.$method(self.0)
+            }
+        }
+    }
 }
 
-fn ser_example() -> Result<(), Box<dyn std::error::Error>> {
-    let mut buffer = vec![0u8; 4096];
-    let mut serializer = Serializer::new(&mut buffer);
+wrap_impl!(ContentKind,       serialize_u8);
+wrap_impl!(HandshakeKind,     serialize_u8);
+wrap_impl!(CompressionMethod, serialize_u8);
+wrap_impl!(ECPointFormat,     serialize_u8);
 
-    let amt = serializer.serialize_bytes(&[1, 2, 3])?;
+wrap_impl!(ExtensionKind,   serialize_u16);
+wrap_impl!(CipherSuite,     serialize_u16);
+wrap_impl!(SupportedGroup,  serialize_u16);
+wrap_impl!(SignatureScheme, serialize_u16);
 
-    let amt = serializer.serialize_vector(0..=32, |serializer| {
-        let amt = serializer.serialize_bytes(&[1, 2, 3])?;
 
-        let amt = serializer.serialize_vector(0..=32, |serializer| {
-            let amt = serializer.serialize_u8(128)?;
+impl Serialize for ProtocolVersion {
+    #[inline]
+    fn serialize<T: AsMut<[u8]> + AsRef<[u8]>>(&self, serializer: &mut Serializer<T>) -> Result<(), Error> {
+        serializer.serialize_slice(&self.to_be_bytes())
+    }
+}
 
-            Ok(())
-        })?;
+impl Serialize for Random {
+    #[inline]
+    fn serialize<T: AsMut<[u8]> + AsRef<[u8]>>(&self, serializer: &mut Serializer<T>) -> Result<(), Error> {
+        serializer.serialize_slice(self.as_bytes())
+    }
+}
 
-        Ok(())
-    })?;
-
-    Ok(())
+impl Serialize for SessionId {
+    #[inline]
+    fn serialize<T: AsMut<[u8]> + AsRef<[u8]>>(&self, serializer: &mut Serializer<T>) -> Result<(), Error> {
+        serializer.serialize_vector(0..=SessionId::MAX_LEN, |serializer| serializer.serialize_slice(self.as_bytes()))
+    }
 }

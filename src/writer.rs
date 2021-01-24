@@ -1,99 +1,43 @@
 use crate::wire::*;
-use crate::x25519::X25519SecretKey;
-use crate::x25519::X25519PublicKey;
 use crate::error::{Error, ErrorKind};
 use crate::ser::Serializer;
-use crate::ser::write_tls_plaintext_record;
 
-use std::convert::TryFrom;
-use std::io::{self, Read, Write, Seek, SeekFrom};
+use core::convert::TryFrom;
 
 
-#[derive(Debug, Clone)]
-pub struct HandshakeConfig {
-    pub server_names: Vec<String>,
-    pub supported_versions: Vec<ProtocolVersion>,
-    pub application_protocols: Vec<Vec<u8>>,
-    pub supported_cipher_suites: Vec<CipherSuite>,
-    pub supported_groups: Vec<SupportedGroup>,
-    pub signature_algorithms: Vec<SignatureScheme>,
-    pub ec_point_formats: Vec<ECPointFormat>,
+pub fn write_tls_plaintext_record<T: AsMut<[u8]> + AsRef<[u8]>, F: FnOnce(&mut Serializer<T>) -> Result<(), Error>>(serializer: &mut Serializer<T>, 
+    kind: ContentKind, version: ProtocolVersion, serialize_fn: F) -> Result<(), Error> {
+    // 5.1.  Record Layer
+    // https://tools.ietf.org/html/rfc8446#section-5.1
+    // struct {
+    //     ContentType type;
+    //     ProtocolVersion legacy_record_version;
+    //     uint16 length;
+    //     opaque fragment[TLSPlaintext.length];
+    // } TLSPlaintext;
+    serializer.serialize_slice(&[
+        kind.0, version.major, version.minor,
+    ])?;
+    serializer.serialize_vector(0..=u16::MAX as usize, serialize_fn)
 }
 
-impl HandshakeConfig {
-    pub fn add_server_name(&mut self, server_name: &str) {
-        self.server_names.push(server_name.to_string());
-    }
-
-    pub fn add_application_protocol(&mut self, application_protocol: &[u8]) {
-        self.application_protocols.push(application_protocol.to_vec());
-    }
-
-    pub fn add_cipher_suite(&mut self, cipher_suite: CipherSuite) {
-        self.supported_cipher_suites.push(cipher_suite);
-    }
-}
-
-impl Default for HandshakeConfig {
-    fn default() -> Self {
-        HandshakeConfig {
-            server_names: vec![],
-            supported_versions: vec![
-                ProtocolVersion::TLS_V1_3,
-                ProtocolVersion::TLS_V1_2, 
-            ],
-            application_protocols: vec![],
-            supported_cipher_suites: vec![
-                CipherSuite::TLS_AES_128_GCM_SHA256,       // 0x13, 0x01
-                CipherSuite::TLS_CHACHA20_POLY1305_SHA256, // 0x13, 0x03
-            ],
-            supported_groups: vec![
-                // SupportedGroup::X448,
-                SupportedGroup::X25519,
-            ],
-            signature_algorithms: vec![
-                SignatureScheme::ED25519,
-            ],
-            ec_point_formats: vec![
-                ECPointFormat::UNCOMPRESSED,
-            ],
-        }
-    }
-}
-
-pub struct Session {
-    client_random: Random,
-    client_session_id: SessionId,
-    server_random: Random,
-    server_session_id: SessionId,
-    client_x25519_secret_key: X25519SecretKey,
-    server_x25519_public_key: X25519PublicKey,
-    // Negotiated
-    version: ProtocolVersion,
-    cipher_suite: CipherSuite,
-    alpn: Option<Vec<u8>>,
-}
-
-pub fn write_extension<T: AsMut<[u8]> + AsRef<[u8]>, F: FnMut(&mut Serializer<T>) -> Result<(), Error>>(serializer: &mut Serializer<T>, kind: ExtensionKind, serialize_fn: F) -> Result<usize, Error> {
+pub fn write_extension<T: AsMut<[u8]> + AsRef<[u8]>, F: FnOnce(&mut Serializer<T>) -> Result<(), Error>>(serializer: &mut Serializer<T>, kind: ExtensionKind, serialize_fn: F) -> Result<(), Error> {
     // B.3.1.  Key Exchange Messages
     // https://tools.ietf.org/html/rfc8446#appendix-B.3.1
     // struct {
     //     ExtensionType extension_type;
     //     opaque extension_data<0..2^16-1>;
     // } Extension;
-    serializer.serialize_many(|serializer| {
-        // Extension Kind
-        serializer.serialize_bytes(&kind.to_be_bytes())?;
-        // Extension Data
-        // <0..2^16-1>
-        serializer.serialize_vector(0..=65535, serialize_fn)?;
 
-        Ok(())
-    })
+    // Extension Kind
+    serializer.serialize_slice(&kind.to_be_bytes())?;
+    // Extension Data
+    // <0..2^16-1>
+    serializer.serialize_vector(0..=65535, serialize_fn)
 }
 
 
-pub fn write_ext_supported_versions<T: AsMut<[u8]> + AsRef<[u8]>>(serializer: &mut Serializer<T>, supported_versions: &[ProtocolVersion]) -> Result<usize, Error> {
+pub fn write_ext_supported_versions<T: AsMut<[u8]> + AsRef<[u8]>>(serializer: &mut Serializer<T>, supported_versions: &[ProtocolVersion]) -> Result<(), Error> {
     // 4.2.1.  Supported Versions
     // https://tools.ietf.org/html/rfc8446#section-4.2.1
     // 
@@ -110,25 +54,21 @@ pub fn write_ext_supported_versions<T: AsMut<[u8]> + AsRef<[u8]>>(serializer: &m
         // protocol versions
         serializer.serialize_vector(2..=254, |serializer| {
             for version in supported_versions.iter() {
-                serializer.serialize_bytes(&version.to_be_bytes())?;
+                serializer.serialize_slice(&version.to_be_bytes())?;
             }
 
             Ok(())
-        })?;
-
-        Ok(())
+        })
     })
 }
 
-pub fn write_ext_selected_version<T: AsMut<[u8]> + AsRef<[u8]>>(serializer: &mut Serializer<T>, selected_version: ProtocolVersion) -> Result<usize, Error> {
+pub fn write_ext_selected_version<T: AsMut<[u8]> + AsRef<[u8]>>(serializer: &mut Serializer<T>, selected_version: ProtocolVersion) -> Result<(), Error> {
     write_extension(serializer, ExtensionKind::SUPPORTED_VERSIONS, |serializer| {
-        serializer.serialize_bytes(&selected_version.to_be_bytes())?;
-
-        Ok(())
+        serializer.serialize_slice(&selected_version.to_be_bytes())
     })
 }
 
-pub fn write_ext_server_names<S: AsRef<str>, T: AsMut<[u8]> + AsRef<[u8]>>(serializer: &mut Serializer<T>, server_names: &[S]) -> Result<usize, Error> {
+pub fn write_ext_server_names<S: AsRef<str>, T: AsMut<[u8]> + AsRef<[u8]>>(serializer: &mut Serializer<T>, server_names: &[S]) -> Result<(), Error> {
     // 3.  Server Name Indication
     // https://tools.ietf.org/html/rfc6066#section-3
     // 
@@ -156,19 +96,16 @@ pub fn write_ext_server_names<S: AsRef<str>, T: AsMut<[u8]> + AsRef<[u8]>>(seria
                 serializer.serialize_u8(ServerNameKind::HOST_NAME.0)?;
                 // host name slice
                 serializer.serialize_vector(1..=65535, |serializer| {
-                    serializer.serialize_bytes(server_name.as_ref().as_bytes())?;
-                    Ok(())
+                    serializer.serialize_slice(server_name.as_ref().as_bytes())
                 })?;
             }
 
             Ok(())
-        })?;
-
-        Ok(())
+        })
     })
 }
 
-pub fn write_ext_application_protos<B: AsRef<[u8]>, T: AsMut<[u8]> + AsRef<[u8]>>(serializer: &mut Serializer<T>, application_protos: &[B]) -> Result<usize, Error> {
+pub fn write_ext_application_protos<B: AsRef<[u8]>, T: AsMut<[u8]> + AsRef<[u8]>>(serializer: &mut Serializer<T>, application_protos: &[B]) -> Result<(), Error> {
     // 3.1.  The Application-Layer Protocol Negotiation Extension
     // https://tools.ietf.org/html/rfc7301#section-3.1
     // 
@@ -181,19 +118,24 @@ pub fn write_ext_application_protos<B: AsRef<[u8]>, T: AsMut<[u8]> + AsRef<[u8]>
         serializer.serialize_vector(2..=65535, |serializer| {
             for application_proto in application_protos.iter() {
                 serializer.serialize_vector(1..=255, |serializer| {
-                    serializer.serialize_bytes(application_proto.as_ref())?;
-                    Ok(())
+                    serializer.serialize_slice(application_proto.as_ref())
                 })?;
             }
 
             Ok(())
-        })?;
-
-        Ok(())
+        })
     })
 }
 
-pub fn write_ext_supported_groups<T: AsMut<[u8]> + AsRef<[u8]>>(serializer: &mut Serializer<T>, supported_groups: &[SupportedGroup]) -> Result<usize, Error> {
+pub fn write_ext_selected_application_proto<B: AsRef<[u8]>, T: AsMut<[u8]> + AsRef<[u8]>>(serializer: &mut Serializer<T>, application_proto: B) -> Result<(), Error> {
+    write_extension(serializer, ExtensionKind::APPLICATION_LAYER_PROTOCOL_NEGOTIATION, |serializer| {
+        serializer.serialize_vector(1..=255, |serializer| {
+            serializer.serialize_slice(application_proto.as_ref())
+        })
+    })
+}
+
+pub fn write_ext_supported_groups<T: AsMut<[u8]> + AsRef<[u8]>>(serializer: &mut Serializer<T>, supported_groups: &[SupportedGroup]) -> Result<(), Error> {
     // 4.2.7.  Supported Groups
     // https://tools.ietf.org/html/rfc8446#section-4.2.7
     // 
@@ -218,17 +160,15 @@ pub fn write_ext_supported_groups<T: AsMut<[u8]> + AsRef<[u8]>>(serializer: &mut
     write_extension(serializer, ExtensionKind::SUPPORTED_GROUPS, |serializer| {
         serializer.serialize_vector(2..=65535, |serializer| {
             for group in supported_groups.iter() {
-                serializer.serialize_bytes(&group.to_be_bytes())?;
+                serializer.serialize_slice(&group.to_be_bytes())?;
             }
 
             Ok(())
-        })?;
-
-        Ok(())
+        })
     })
 }
 
-pub fn write_ext_signature_algorithms<T: AsMut<[u8]> + AsRef<[u8]>>(serializer: &mut Serializer<T>, signature_algorithms: &[SignatureScheme]) -> Result<usize, Error> {
+pub fn write_ext_signature_algorithms<T: AsMut<[u8]> + AsRef<[u8]>>(serializer: &mut Serializer<T>, signature_algorithms: &[SignatureScheme]) -> Result<(), Error> {
     // 4.2.3.  Signature Algorithms
     // https://tools.ietf.org/html/rfc8446#section-4.2.3
     // 
@@ -272,17 +212,15 @@ pub fn write_ext_signature_algorithms<T: AsMut<[u8]> + AsRef<[u8]>>(serializer: 
     write_extension(serializer, ExtensionKind::SIGNATURE_ALGORITHMS, |serializer| {
         serializer.serialize_vector(2..=65534, |serializer| {
             for signature_algorithm in signature_algorithms.iter() {
-                serializer.serialize_bytes(&signature_algorithm.to_be_bytes())?;
+                serializer.serialize_slice(&signature_algorithm.to_be_bytes())?;
             }
 
             Ok(())
-        })?;
-
-        Ok(())
+        })
     })
 }
 
-pub fn write_ext_ec_point_foramts<T: AsMut<[u8]> + AsRef<[u8]>>(serializer: &mut Serializer<T>, ec_point_foramts: &[ECPointFormat]) -> Result<usize, Error> {
+pub fn write_ext_ec_point_foramts<T: AsMut<[u8]> + AsRef<[u8]>>(serializer: &mut Serializer<T>, ec_point_foramts: &[ECPointFormat]) -> Result<(), Error> {
     // 5.1.2.  Supported Point Formats Extension
     // https://tools.ietf.org/html/rfc8422#section-5.1.2
     // 
@@ -295,32 +233,24 @@ pub fn write_ext_ec_point_foramts<T: AsMut<[u8]> + AsRef<[u8]>>(serializer: &mut
     //     ECPointFormat ec_point_format_list<1..2^8-1>
     // } ECPointFormatList;
     write_extension(serializer, ExtensionKind::EC_POINT_FORMATS, |serializer| {
-        serializer.serialize_vector(2..=255, |serializer| {
+        serializer.serialize_vector(1..=255, |serializer| {
             for ec_point_foramt in ec_point_foramts.iter() {
-                serializer.serialize_bytes(&ec_point_foramt.to_be_bytes())?;
+                serializer.serialize_slice(&ec_point_foramt.to_be_bytes())?;
             }
 
             Ok(())
-        })?;
-
-        Ok(())
+        })
     })
 }
 
-fn write_ext_key_share_entry<B: AsRef<[u8]>, T: AsMut<[u8]> + AsRef<[u8]>>(serializer: &mut Serializer<T>, key_share_entry: &KeyShareEntry<B>) -> Result<usize, Error> {
-    serializer.serialize_many(|serializer| {
-        serializer.serialize_bytes(&key_share_entry.group.to_be_bytes())?;
-        serializer.serialize_vector(1..=65535, |serializer| {
-            serializer.serialize_bytes(key_share_entry.key.as_ref())?;
-
-            Ok(())
-        })?;
-
-        Ok(())
+fn write_ext_key_share_entry<B: AsRef<[u8]>, T: AsMut<[u8]> + AsRef<[u8]>>(serializer: &mut Serializer<T>, key_share_entry: &KeyShareEntry<B>) -> Result<(), Error> {
+    serializer.serialize_slice(&key_share_entry.group.to_be_bytes())?;
+    serializer.serialize_vector(1..=65535, |serializer| {
+        serializer.serialize_slice(key_share_entry.key.as_ref())
     })
 }
 
-pub fn write_ext_key_shares<B: AsRef<[u8]>, T: AsMut<[u8]> + AsRef<[u8]>>(serializer: &mut Serializer<T>, key_shares: &[KeyShareEntry<B>]) -> Result<usize, Error> {
+pub fn write_ext_key_shares<B: AsRef<[u8]>, T: AsMut<[u8]> + AsRef<[u8]>>(serializer: &mut Serializer<T>, key_shares: &[KeyShareEntry<B>]) -> Result<(), Error> {
     // 4.2.8.  Key Share
     // https://tools.ietf.org/html/rfc8446#section-4.2.8
     // 
@@ -347,23 +277,19 @@ pub fn write_ext_key_shares<B: AsRef<[u8]>, T: AsMut<[u8]> + AsRef<[u8]>>(serial
             }
 
             Ok(())
-        })?;
-
-        Ok(())
+        })
     })
 }
 
-pub fn write_ext_key_share<B: AsRef<[u8]>, T: AsMut<[u8]> + AsRef<[u8]>>(serializer: &mut Serializer<T>, key_share: &KeyShareEntry<B>) -> Result<usize, Error> {
+pub fn write_ext_key_share<B: AsRef<[u8]>, T: AsMut<[u8]> + AsRef<[u8]>>(serializer: &mut Serializer<T>, key_share: &KeyShareEntry<B>) -> Result<(), Error> {
     write_extension(serializer, ExtensionKind::KEY_SHARE, |serializer| {
-        write_ext_key_share_entry(serializer, key_share)?;
-
-        Ok(())
+        write_ext_key_share_entry(serializer, key_share)
     })
 }
 
 
-    
-pub fn write_handshake<T: AsMut<[u8]> + AsRef<[u8]>, F: FnMut(&mut Serializer<T>) -> Result<(), Error>>(serializer: &mut Serializer<T>, kind: HandshakeKind, serialize_fn: F) -> Result<usize, Error> {
+
+pub fn write_handshake<T: AsMut<[u8]> + AsRef<[u8]>, F: FnOnce(&mut Serializer<T>) -> Result<(), Error>>(serializer: &mut Serializer<T>, kind: HandshakeKind, serialize_fn: F) -> Result<(), Error> {
     // B.3.  Handshake Protocol
     // https://tools.ietf.org/html/rfc8446#appendix-B.3
     // struct {
@@ -384,98 +310,6 @@ pub fn write_handshake<T: AsMut<[u8]> + AsRef<[u8]>, F: FnMut(&mut Serializer<T>
     // } Handshake;
     const U24_MAX: usize = 16777215; // 2 ** 24 - 1
 
-    serializer.serialize_many(|serializer| {
-        serializer.serialize_u8(kind.0)?;
-        serializer.serialize_vector(0..=U24_MAX, serialize_fn)?;
-
-        Ok(())
-    })
-}
-
-
-pub fn write_handshake_client_hello<T: AsMut<[u8]> + AsRef<[u8]>>(serializer: &mut Serializer<T>, config: &HandshakeConfig, session: &Session) -> Result<usize, Error> {
-    // B.3.1.  Key Exchange Messages
-    // https://tools.ietf.org/html/rfc8446#appendix-B.3.1
-    // struct {
-    //     ProtocolVersion legacy_version = 0x0303;    /* TLS v1.2 */
-    //     Random random;
-    //     opaque legacy_session_id<0..32>;
-    //     CipherSuite cipher_suites<2..2^16-2>;
-    //     opaque legacy_compression_methods<1..2^8-1>;
-    //     Extension extensions<8..2^16-1>;
-    // } ClientHello;
-    let random = session.client_random;
-    let session_id = session.client_session_id;
-
-    let x25519_public_key = session.client_x25519_secret_key.public_key();
-    let client_key_shares: &[KeyShareEntry<&[u8]>] = &[
-        KeyShareEntry { group: SupportedGroup::X25519, key: x25519_public_key.as_bytes() },
-    ];
-
-    write_tls_plaintext_record(serializer, ContentKind::HANDSHAKE, ProtocolVersion::TLS_V1_2, |serializer| {
-        write_handshake(serializer, HandshakeKind::CLIENT_HELLO, |serializer| {
-            serializer.serialize_bytes(&ProtocolVersion::TLS_V1_2.to_be_bytes())?;
-            serializer.serialize_bytes(random.as_bytes())?;
-
-            // serializer.serialize_u8(session_id.len())?;         // Session id bytes len
-            // serializer.serialize_bytes(session_id.as_bytes())?;
-            // <0..32>
-            serializer.serialize_vector(0..=32, |serializer| {
-                serializer.serialize_bytes(session_id.as_bytes())?;
-                Ok(())
-            })?;
-
-            // <2..2^16-2>
-            serializer.serialize_vector(2..=65534, |serializer| {
-                for cipher_suite in config.supported_cipher_suites.iter() {
-                    // cursor.write_all(&cipher_suite.to_be_bytes())?;
-                    serializer.serialize_bytes(&cipher_suite.to_be_bytes())?;
-                }
-
-                Ok(())
-            })?;
-
-            // <1..2^8-1>
-            serializer.serialize_vector(1..=255, |serializer| {
-                serializer.serialize_bytes(&CompressionMethod::NULL.to_be_bytes())?;
-                Ok(())
-            })?;
-
-            // Extension extensions<8..2^16-1>;
-            serializer.serialize_vector(8..=65535, |serializer| {
-                write_ext_supported_versions(serializer, &config.supported_versions)?;
-
-                if !config.server_names.is_empty() {
-                    write_ext_server_names(serializer, &config.server_names)?;
-                }
-                
-                if !config.application_protocols.is_empty() {
-                    write_ext_application_protos(serializer, &config.application_protocols[..])?;
-                }
-
-                if !config.supported_groups.is_empty() {
-                    write_ext_supported_groups(serializer, &config.supported_groups[..])?;
-                }
-
-                if !config.signature_algorithms.is_empty() {
-                    write_ext_signature_algorithms(serializer, &config.signature_algorithms[..])?;
-                }
-
-                if !config.ec_point_formats.is_empty() {
-                    write_ext_ec_point_foramts(serializer, &config.ec_point_formats[..])?;
-                }
-
-                // session ticket
-                // encrypt-then-mac
-                // extended master secret
-                write_ext_key_shares(serializer, client_key_shares)?;
-
-                Ok(())
-            })?;
-
-            Ok(())
-        })?;
-
-        Ok(())
-    })
+    serializer.serialize_u8(kind.0)?;
+    serializer.serialize_vector(0..=U24_MAX, serialize_fn)
 }
