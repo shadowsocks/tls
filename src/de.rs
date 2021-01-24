@@ -61,11 +61,11 @@ impl<T: AsRef<[u8]>> Deserializer<T> {
     pub fn buf_len(&self) -> usize {
         self.inner.as_ref().len()
     }
-    
+
     pub fn remainder_len(&self) -> usize {
         self.buf_len() - self.pos
     }
-    
+
     pub fn deserialize_u8(&mut self) -> Result<u8, Error> {
         let mut buf = [0u8; 1];
 
@@ -169,8 +169,8 @@ impl<T: AsRef<[u8]>> Deserializer<T> {
     }
 
     #[inline]
-    pub fn deserialize<V: Deserialize>(deserializer: &mut Deserializer<T>) -> Result<V, Error> {
-        V::deserialize(deserializer)
+    pub fn deserialize<V: Deserialize>(&mut self) -> Result<V, Error> {
+        V::deserialize(self)
     }
 }
 
