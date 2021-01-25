@@ -166,10 +166,10 @@ impl Random {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct SessionId {
-    data: [u8; 32],
-    len: u8,
+    pub(crate) data: [u8; 32],
+    pub(crate) len: u8,
 }
 
 impl SessionId {
@@ -199,6 +199,14 @@ impl SessionId {
 
     pub fn as_bytes(&self) -> &[u8] {
         &self.data[..self.len as usize]
+    }
+}
+
+impl std::fmt::Debug for SessionId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("SessionId")
+            .field(&self.as_bytes())
+            .finish()
     }
 }
 

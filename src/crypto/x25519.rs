@@ -1,15 +1,11 @@
 // https://github.com/cloudflare/boringtun/blob/master/src/crypto/x25519/mod.rs
-
+// 
 // Copyright (c) 2019 Cloudflare, Inc. All rights reserved.
 // SPDX-License-Identifier: BSD-3-Clause
-
+// 
 //! Elliptic-curve Diffie-Hellman exchange over Curve25519.
-
 use rand;
 
-// use crate::noise::errors::WireGuardError;
-// use crate::noise::make_array;
-// use base64::decode;
 use std::ops::Add;
 use std::ops::Mul;
 use std::ops::Sub;
@@ -30,7 +26,7 @@ impl core::fmt::Display for InvalidKey {
 
 
 #[inline(always)]
-pub fn make_array<A, T>(slice: &[T]) -> A
+fn make_array<A, T>(slice: &[T]) -> A
 where
     A: Sized + Default + AsMut<[T]> + std::borrow::Borrow<[T]>,
     T: Copy,
@@ -155,6 +151,12 @@ impl X25519PublicKey {
     // Return the public key represented as a byte array.
     pub fn as_bytes(&self) -> &[u8] {
         &self.internal[..]
+    }
+}
+
+impl AsRef<[u8]> for X25519PublicKey {
+    fn as_ref(&self) -> &[u8] {
+        self.as_bytes()
     }
 }
 

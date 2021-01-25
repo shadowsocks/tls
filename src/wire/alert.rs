@@ -12,8 +12,8 @@ impl AlertLevel {
     }
 }
 
-impl std::fmt::Display for AlertLevel {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for AlertLevel {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match *self {
             Self::WARN => write!(f, "WARN"),
             Self::FATAL => write!(f, "FATAL"),
@@ -21,7 +21,6 @@ impl std::fmt::Display for AlertLevel {
         }
     }
 }
-
 
 // TLS Alerts
 // https://www.iana.org/assignments/tls-parameters/tls-parameters.xhtml#tls-parameters-6
@@ -76,8 +75,8 @@ impl AlertDescription {
     }
 }
 
-impl std::fmt::Display for AlertDescription {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for AlertDescription {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match *self {
             Self::CLOSE_NOTIFY       => write!(f, "CLOSE_NOTIFY"),
             Self::UNEXPECTED_MESSAGE => write!(f, "UNEXPECTED_MESSAGE"),
@@ -130,12 +129,11 @@ impl Alert {
     }
 }
 
-impl std::fmt::Display for Alert {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "[Alert] Level={} Description={}", self.level, self.description)
+impl core::fmt::Display for Alert {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "TLS {}: {}", self.level, self.description)
     }
 }
-
 
 #[derive(Debug)]
 pub struct AlertPacket<T> {

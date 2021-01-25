@@ -102,6 +102,13 @@ impl From<std::io::Error> for Error {
     }
 }
 
+impl From<Error> for std::io::Error {
+    #[inline]
+    fn from(e: Error) -> std::io::Error {
+        std::io::Error::new(std::io::ErrorKind::Other, e)
+    }
+}
+
 impl std::error::Error for Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self.error {

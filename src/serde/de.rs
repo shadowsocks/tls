@@ -25,6 +25,20 @@ primitive_impl!(u16, deserialize_u16);
 primitive_impl!(u32, deserialize_u32);
 
 
+pub type PacketRef<'a> = Deserializer<&'a [u8]>;
+pub type PacketMut<'a> = Deserializer<&'a mut [u8]>;
+
+fn abc() {
+    let mut buf = vec![0u8; 1024];
+
+    {
+        let pkt: PacketRef = PacketRef::new(&buf);
+    }
+    {
+        let pkt: PacketMut = PacketMut::new(&mut buf);
+    }
+}
+
 pub struct Deserializer<T> {
     inner: T,
     pos: usize,
@@ -99,16 +113,10 @@ impl<T: AsRef<[u8]>> Deserializer<T> {
     }
 
     pub fn deserialize_vector(&mut self, len_range: RangeInclusive<usize>) -> Result<&[u8], Error> {
-        const U8_MAX: usize  = u8::MAX as usize;
-        const U16_MAX: usize = u16::MAX as usize;
-        const U24_MAX: usize = 16777215; // 2 ** 24 - 1
-        #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
-        const U32_MAX: usize = u32::MAX as usize;
-
         const U16_MIN: usize =  U8_MAX + 1;
         const U24_MIN: usize = U16_MAX + 1;
         const U32_MIN: usize = U24_MAX + 1;
-
+        
         let min_len = *(len_range.start());
         let max_len = *(len_range.end());
         debug_assert!(min_len <= max_len);

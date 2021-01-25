@@ -28,6 +28,15 @@ impl ProtocolVersion {
     pub const TLS_V1_2: Self = Self { major: 3, minor: 3 };
     pub const TLS_V1_3: Self = Self { major: 3, minor: 4 };
     
+    
+    pub const fn new(major: u8, minor: u8) -> Self {
+        Self { major, minor }
+    }
+    
+    pub const fn from_be_bytes(bytes: [u8; 2]) -> Self {
+        Self { major: bytes[0], minor: bytes[1] }
+    }
+    
     pub const fn to_be_bytes(&self) -> [u8; 2] {
         [self.major, self.minor]
     }
