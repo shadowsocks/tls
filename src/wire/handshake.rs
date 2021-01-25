@@ -43,8 +43,8 @@ impl HandshakeKind {
     }
 }
 
-impl std::fmt::Display for HandshakeKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for HandshakeKind {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match *self {
             Self::HELLO_REQUEST_RESERVED => write!(f, "HELLO_REQUEST_RESERVED"),
             Self::CLIENT_HELLO => write!(f, "CLIENT_HELLO"),
@@ -91,8 +91,8 @@ impl CompressionMethod {
     }
 }
 
-impl std::fmt::Display for CompressionMethod {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for CompressionMethod {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match *self {
             Self::NULL => write!(f, "NULL"),
             Self::DEFLATE => write!(f, "DEFLATE"),
@@ -202,8 +202,8 @@ impl SessionId {
     }
 }
 
-impl std::fmt::Debug for SessionId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Debug for SessionId {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_tuple("SessionId")
             .field(&self.as_bytes())
             .finish()
@@ -223,4 +223,28 @@ impl Default for SessionId {
             len: Self::MAX_LEN as u8,
         }
     }
+}
+
+
+// https://tools.ietf.org/html/rfc8446#appendix-B.3
+// struct {
+//     HandshakeType msg_type;    /* handshake type */
+//     uint24 length;             /* bytes in message */
+//     select (Handshake.msg_type) {
+//         case client_hello:          ClientHello;
+//         case server_hello:          ServerHello;
+//         case end_of_early_data:     EndOfEarlyData;
+//         case encrypted_extensions:  EncryptedExtensions;
+//         case certificate_request:   CertificateRequest;
+//         case certificate:           Certificate;
+//         case certificate_verify:    CertificateVerify;
+//         case finished:              Finished;
+//         case new_session_ticket:    NewSessionTicket;
+//         case key_update:            KeyUpdate;
+//     };
+// } Handshake;
+#[derive(Debug)]
+pub struct Handshake<M> {
+    pub kind: HandshakeKind,
+    pub message: M,
 }

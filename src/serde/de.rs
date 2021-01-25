@@ -28,16 +28,16 @@ primitive_impl!(u32, deserialize_u32);
 pub type PacketRef<'a> = Deserializer<&'a [u8]>;
 pub type PacketMut<'a> = Deserializer<&'a mut [u8]>;
 
-fn abc() {
-    let mut buf = vec![0u8; 1024];
+// fn abc() {
+//     let mut buf = vec![0u8; 1024];
 
-    {
-        let pkt: PacketRef = PacketRef::new(&buf);
-    }
-    {
-        let pkt: PacketMut = PacketMut::new(&mut buf);
-    }
-}
+//     {
+//         let pkt: PacketRef = PacketRef::new(&buf);
+//     }
+//     {
+//         let pkt: PacketMut = PacketMut::new(&mut buf);
+//     }
+// }
 
 pub struct Deserializer<T> {
     inner: T,
@@ -179,6 +179,13 @@ impl<T: AsRef<[u8]>> Deserializer<T> {
     #[inline]
     pub fn deserialize<V: Deserialize>(&mut self) -> Result<V, Error> {
         V::deserialize(self)
+    }
+}
+
+
+impl Deserialize for () {
+    fn deserialize<T: AsRef<[u8]>>(deserializer: &mut Deserializer<T>) -> Result<Self, Error> {
+        Ok(())
     }
 }
 

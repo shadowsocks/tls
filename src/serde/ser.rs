@@ -177,6 +177,12 @@ impl<T: AsMut<[u8]> + AsRef<[u8]>> Serializer<T> {
 }
 
 
+impl Serialize for () {
+    fn serialize<T: AsMut<[u8]> + AsRef<[u8]>>(&self, serializer: &mut Serializer<T>) -> Result<(), Error> {
+        Ok(())
+    }
+}
+
 macro_rules! wrap_impl {
     ($ty:ident, $method:ident) => {
         impl Serialize for $ty {

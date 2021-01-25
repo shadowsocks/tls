@@ -1,8 +1,10 @@
+use crate::wire::*;
+
 // 5.1.  Record Layer
 // https://tools.ietf.org/html/rfc8446#section-5.1
-pub const MAX_RECORD_DATA_LEN: usize = 1 << 14; // 2**14 = 16384
-pub const MAX_RECORD_LEN: usize      = MAX_RECORD_DATA_LEN + 1 + 2 + 2;
-
+pub const RECORD_HDR_LEN: usize  = 5;
+pub const RECORD_MAX_DLEN: usize = U14_MAX;
+pub const RECORD_MAX_LEN: usize  = RECORD_HDR_LEN + RECORD_MAX_DLEN;
 
 // TLS ContentType
 // https://www.iana.org/assignments/tls-parameters/tls-parameters.xhtml#tls-parameters-5
@@ -36,3 +38,31 @@ impl std::fmt::Display for ContentKind {
         }
     }
 }
+
+// 5.1.  Record Layer
+// https://tools.ietf.org/html/rfc8446#section-5.1
+// struct {
+//     ContentType type;
+//     ProtocolVersion legacy_record_version;
+//     uint16 length;
+//     opaque fragment[TLSPlaintext.length];
+// } TLSPlaintext;
+#[derive(Debug)]
+pub struct TlsPlaintext<C> {
+    pub kind: ContentKind,
+    pub version: ProtocolVersion,
+    pub content: C,
+}
+
+// struct {
+//   opaque content[TLSPlaintext.length];
+//   ContentType type;
+//   uint8 zeros[length_of_padding];
+// } TLSInnerPlaintext;
+// 
+// struct {
+//   ContentType opaque_type = application_data; /* 23 */
+//   ProtocolVersion legacy_record_version = 0x0303; /* TLS v1.2 */
+//   uint16 length;
+//   opaque encrypted_record[TLSCiphertext.length];
+// } TLSCiphertext;
