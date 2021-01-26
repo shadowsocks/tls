@@ -82,8 +82,8 @@ impl ProtocolVersion {
     }
 }
 
-impl std::fmt::Display for ProtocolVersion {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for ProtocolVersion {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match *self {
             Self::SSL_V2 => write!(f, "SSLv2"),
             Self::SSL_V3 => write!(f, "SSLv3"),

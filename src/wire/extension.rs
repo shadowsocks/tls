@@ -1,8 +1,6 @@
 use super::ProtocolVersion;
 
-use std::convert::TryFrom;
-use std::io::{self, Read, Write, Seek, SeekFrom};
-
+use core::convert::TryFrom;
 
 // 4.2.  Extensions
 // https://tools.ietf.org/html/rfc8446#section-4.2
@@ -74,8 +72,8 @@ impl ExtensionKind {
     }
 }
 
-impl std::fmt::Display for ExtensionKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for ExtensionKind {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match *self {
             Self::SERVER_NAME => write!(f, "SERVER_NAME"),
             Self::MAX_FRAGMENT_LENGTH => write!(f, "MAX_FRAGMENT_LENGTH"),
@@ -146,8 +144,8 @@ impl ServerNameKind {
     }
 }
 
-impl std::fmt::Display for ServerNameKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for ServerNameKind {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match *self {
             Self::HOST_NAME => write!(f, "HOST_NAME"),
             _ => write!(f, "Unknow({})", self.0),
@@ -173,8 +171,8 @@ impl CertificateKind {
     }
 }
 
-impl std::fmt::Display for CertificateKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for CertificateKind {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match *self {
             Self::X509 => write!(f, "X509"),
             Self::OPENPGP_RESERVED => write!(f, "OPENPGP_RESERVED"),
@@ -199,8 +197,8 @@ impl CertificateStatusKind {
     }
 }
 
-impl std::fmt::Display for CertificateStatusKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for CertificateStatusKind {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match *self {
             Self::OCSP => write!(f, "OCSP"),
             Self::OCSP_MULTI_RESERVED => write!(f, "OCSP_MULTI_RESERVED"),
@@ -223,8 +221,8 @@ impl CachedInformationType {
     }
 }
 
-impl std::fmt::Display for CachedInformationType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for CachedInformationType {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match *self {
             Self::CERT => write!(f, "CERT"),
             Self::CERT_REQ => write!(f, "CERT_REQ"),
@@ -248,8 +246,8 @@ impl CertificateCompressionAlgorithm {
     }
 }
 
-impl std::fmt::Display for CertificateCompressionAlgorithm {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for CertificateCompressionAlgorithm {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match *self {
             Self::ZLIB => write!(f, "ZLIB"),
             Self::BROTLI => write!(f, "BROTLI"),
@@ -322,8 +320,8 @@ impl SupportedGroup {
     }
 }
 
-impl std::fmt::Display for SupportedGroup {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for SupportedGroup {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match *self {
             Self::SECT163K1 => write!(f, "SECT163K1"),
             Self::SECT163R1 => write!(f, "SECT163R1"),
@@ -424,8 +422,8 @@ impl SignatureScheme {
     }
 }
 
-impl std::fmt::Display for SignatureScheme {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for SignatureScheme {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match *self {
             Self::RSA_PKCS1_SHA1 => write!(f, "RSA_PKCS1_SHA1"),
             Self::ECDSA_SHA1 => write!(f, "ECDSA_SHA1"),
@@ -480,8 +478,8 @@ impl PskKeyExchangeMode {
     }
 }
 
-impl std::fmt::Display for PskKeyExchangeMode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for PskKeyExchangeMode {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match *self {
             Self::PSK_KE => write!(f, "PSK_KE"),
             Self::PSK_DHE_KE => write!(f, "PSK_DHE_KE"),
@@ -509,8 +507,8 @@ impl SignatureAlgorithm {
     }
 }
 
-impl std::fmt::Display for SignatureAlgorithm {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for SignatureAlgorithm {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match *self {
             Self::RSA => write!(f, "RSA"),
             Self::DSA => write!(f, "DSA"),
@@ -543,8 +541,8 @@ impl HashAlgorithm {
     }
 }
 
-impl std::fmt::Display for HashAlgorithm {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for HashAlgorithm {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match *self {
             Self::MD5 => write!(f, "MD5"),
             Self::SHA1 => write!(f, "SHA1"),
@@ -573,8 +571,8 @@ impl ECPointFormat {
     }
 }
 
-impl std::fmt::Display for ECPointFormat {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for ECPointFormat {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match *self {
             Self::UNCOMPRESSED => write!(f, "UNCOMPRESSED"),
             Self::ANSIX962_COMPRESSED_PRIME => write!(f, "ANSIX962_COMPRESSED_PRIME"),
@@ -599,8 +597,8 @@ impl ECCurveKind {
     }
 }
 
-impl std::fmt::Display for ECCurveKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for ECCurveKind {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match *self {
             Self::EXPLICIT_PRIME => write!(f, "EXPLICIT_PRIME"),
             Self::EXPLICIT_CHAR2 => write!(f, "EXPLICIT_CHAR2"),
@@ -668,14 +666,14 @@ impl<T: AsRef<[u8]>> PartialEq for ApplicationLayerProtocol<T> {
     }
 }
 
-impl std::fmt::Display for ApplicationLayerProtocol<&str> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for ApplicationLayerProtocol<&str> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{}", self.0)
     }
 }
 
-impl std::fmt::Display for ApplicationLayerProtocol<&[u8]> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for ApplicationLayerProtocol<&[u8]> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let _ = write!(f, "0x");
         for byte in self.0.iter() {
             let _ = write!(f, "{:x}", byte);
@@ -684,8 +682,8 @@ impl std::fmt::Display for ApplicationLayerProtocol<&[u8]> {
     }
 }
 
-impl std::fmt::Display for ApplicationLayerProtocol<Vec<u8>> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for ApplicationLayerProtocol<Vec<u8>> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let _ = write!(f, "0x");
         for byte in self.0.iter() {
             let _ = write!(f, "{:x}", byte);
@@ -694,8 +692,8 @@ impl std::fmt::Display for ApplicationLayerProtocol<Vec<u8>> {
     }
 }
 
-impl std::fmt::Display for ApplicationLayerProtocol<&Vec<u8>> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for ApplicationLayerProtocol<&Vec<u8>> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let _ = write!(f, "0x");
         for byte in self.0.iter() {
             let _ = write!(f, "{:x}", byte);
@@ -837,8 +835,8 @@ impl ClientCertificateKind {
     }
 }
 
-impl std::fmt::Display for ClientCertificateKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for ClientCertificateKind {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match *self {
             Self::RSA_SIGN => write!(f, "RSA_SIGN"),
             Self::DSS_SIGN => write!(f, "DSS_SIGN"),
@@ -871,8 +869,8 @@ impl SupplementalDataKind {
     }
 }
 
-impl std::fmt::Display for SupplementalDataKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for SupplementalDataKind {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match *self {
             Self::USER_MAPPING_DATA => write!(f, "USER_MAPPING_DATA"),
             Self::AUTHZ_DATA => write!(f, "AUTHZ_DATA"),
@@ -894,8 +892,8 @@ impl UserMappingKind {
     }
 }
 
-impl std::fmt::Display for UserMappingKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for UserMappingKind {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match *self {
             Self::UPN_DOMAIN_HINT => write!(f, "UPN_DOMAIN_HINT"),
             _ => write!(f, "Unknow({})", self.0),
@@ -928,8 +926,8 @@ impl AuthorizationDataFormat {
     }
 }
 
-impl std::fmt::Display for AuthorizationDataFormat {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for AuthorizationDataFormat {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match *self {
             Self::X509_ATTR_CERT => write!(f, "X509_ATTR_CERT"),
             Self::SAML_ASSERTION => write!(f, "SAML_ASSERTION"),

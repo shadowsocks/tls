@@ -12,8 +12,8 @@ impl HeartbeatMode {
     }
 }
 
-impl std::fmt::Display for HeartbeatMode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for HeartbeatMode {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match *self {
             Self::PEER_ALLOWED_TO_SEND => write!(f, "PEER_ALLOWED_TO_SEND"),
             Self::PEER_NOT_ALLOWED_TO_SEND => write!(f, "PEER_NOT_ALLOWED_TO_SEND"),
@@ -36,8 +36,8 @@ impl HeartbeatMessageKind {
     }
 }
 
-impl std::fmt::Display for HeartbeatMessageKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for HeartbeatMessageKind {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match *self {
             Self::HEARTBEAT_REQUEST  => write!(f, "HEARTBEAT_REQUEST"),
             Self::HEARTBEAT_RESPONSE => write!(f, "HEARTBEAT_RESPONSE"),

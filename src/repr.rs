@@ -204,7 +204,7 @@ impl<B: AsRef<[u8]>> Serialize for HandshakeServerHello<B> {
     }
 }
 
-impl Deserialize for HandshakeServerHelloOwned {
+impl<'de> Deserialize<'de> for HandshakeServerHelloOwned {
     fn deserialize<T: AsRef<[u8]>>(deserializer: &mut Deserializer<T>) -> Result<Self, Error> {
         let version = deserializer.deserialize::<ProtocolVersion>()?;
         let random = deserializer.deserialize::<Random>()?;
@@ -265,6 +265,12 @@ impl Deserialize for HandshakeServerHelloOwned {
 }
 
 
+impl<'de: 'a, 'a> Deserialize<'de> for &'a [u8] {
+    fn deserialize<T: AsRef<[u8]>>(deserializer: &'de mut Deserializer<T>) -> Result<&'a [u8], Error> {
+        Ok(deserializer.remainder())
+    }
+}
+
 impl<C: Serialize> Serialize for TlsPlaintext<C> {
     fn serialize<T: AsMut<[u8]> + AsRef<[u8]>>(&self, serializer: &mut Serializer<T>) -> Result<(), Error> {
         serializer.serialize(&self.kind)?;
@@ -273,7 +279,18 @@ impl<C: Serialize> Serialize for TlsPlaintext<C> {
     }
 }
 
-impl<C: Deserialize> Deserialize for TlsPlaintext<C> {
+impl<'de> Deserialize<'de> for TlsPlaintext<&'de [u8]> {
+    fn deserialize<T: AsRef<[u8]>>(deserializer: &'de mut Deserializer<T>) -> Result<TlsPlaintext<&'de [u8]>, Error> {
+        let kind = deserializer.deserialize::<ContentKind>()?;
+        let version = deserializer.deserialize::<ProtocolVersion>()?;
+        
+        let payload = deserializer.deserialize_vector(0..=U16_MAX)?;
+
+        Ok(Self { kind, version, content: payload })
+    }
+}
+
+impl<'de, C: DeserializeOwned> Deserialize<'de> for TlsPlaintext<C> {
     fn deserialize<T: AsRef<[u8]>>(deserializer: &mut Deserializer<T>) -> Result<Self, Error> {
         let kind = deserializer.deserialize::<ContentKind>()?;
         let version = deserializer.deserialize::<ProtocolVersion>()?;
@@ -295,7 +312,16 @@ impl<M: Serialize> Serialize for Handshake<M> {
     }
 }
 
-impl<M: Deserialize> Deserialize for Handshake<M> {
+impl<'de> Deserialize<'de> for Handshake<&'de [u8]> {
+    fn deserialize<T: AsRef<[u8]>>(deserializer: &'de mut Deserializer<T>) -> Result<Self, Error> {
+        let kind = deserializer.deserialize::<HandshakeKind>()?;
+        let payload = deserializer.deserialize_vector(0..=U24_MAX)?;
+
+        Ok(Self { kind, message: payload })
+    }
+}
+
+impl<'de, M: DeserializeOwned> Deserialize<'de> for Handshake<M> {
     fn deserialize<T: AsRef<[u8]>>(deserializer: &mut Deserializer<T>) -> Result<Self, Error> {
         let kind = deserializer.deserialize::<HandshakeKind>()?;
         let payload = deserializer.deserialize_vector(0..=U24_MAX)?;

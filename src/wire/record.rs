@@ -25,8 +25,8 @@ impl ContentKind {
     }
 }
 
-impl std::fmt::Display for ContentKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for ContentKind {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match *self {
             Self::CHANGE_CIPHER_SPEC => write!(f, "CHANGE_CIPHER_SPEC"),
             Self::ALERT => write!(f, "ALERT"),

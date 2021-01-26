@@ -449,8 +449,8 @@ impl CipherSuite {
     pub const TLS_ECDHE_PSK_WITH_AES_128_CCM_SHA256: Self   = Self(u16::from_be_bytes([0xD0, 0x05]));
 }
 
-impl std::fmt::Display for CipherSuite {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for CipherSuite {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match *self {
             Self::TLS_NULL_WITH_NULL_NULL => write!(f, "TLS_NULL_WITH_NULL_NULL"),
             Self::TLS_RSA_WITH_NULL_MD5 => write!(f, "TLS_RSA_WITH_NULL_MD5"),

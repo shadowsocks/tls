@@ -5,13 +5,14 @@ use core::convert::TryFrom;
 use core::ops::RangeInclusive;
 
 
-pub trait Deserialize: Sized {
-    fn deserialize<T: AsRef<[u8]>>(deserializer: &mut Deserializer<T>) -> Result<Self, Error>;
+pub trait Deserialize<'de>: Sized {
+    fn deserialize<T: AsRef<[u8]>>(deserializer: &'de mut Deserializer<T>) -> Result<Self, Error>;
 }
+pub trait DeserializeOwned: for<'de> Deserialize<'de> { }
 
 macro_rules! primitive_impl {
     ($ty:ident, $method:ident) => {
-        impl Deserialize for $ty {
+        impl<'de> Deserialize<'de> for $ty {
             #[inline]
             fn deserialize<T: AsRef<[u8]>>(deserializer: &mut Deserializer<T>) -> Result<Self, Error> {
                 deserializer.$method()
@@ -19,6 +20,7 @@ macro_rules! primitive_impl {
         }
     }
 }
+
 
 primitive_impl!(u8, deserialize_u8);
 primitive_impl!(u16, deserialize_u16);
@@ -28,16 +30,8 @@ primitive_impl!(u32, deserialize_u32);
 pub type PacketRef<'a> = Deserializer<&'a [u8]>;
 pub type PacketMut<'a> = Deserializer<&'a mut [u8]>;
 
-// fn abc() {
-//     let mut buf = vec![0u8; 1024];
 
-//     {
-//         let pkt: PacketRef = PacketRef::new(&buf);
-//     }
-//     {
-//         let pkt: PacketMut = PacketMut::new(&mut buf);
-//     }
-// }
+use std::borrow::Borrow;
 
 pub struct Deserializer<T> {
     inner: T,
@@ -71,6 +65,11 @@ impl<T: AsRef<[u8]>> Deserializer<T> {
 }
 
 impl<T: AsRef<[u8]>> Deserializer<T> {
+    pub fn remainder(&self) -> &[u8] {
+        let buf = self.inner.as_ref();
+        &buf[self.pos..]
+    }
+
     #[inline]
     pub fn buf_len(&self) -> usize {
         self.inner.as_ref().len()
@@ -112,7 +111,7 @@ impl<T: AsRef<[u8]>> Deserializer<T> {
         Ok(u32::from_be_bytes(buf))
     }
 
-    pub fn deserialize_vector(&mut self, len_range: RangeInclusive<usize>) -> Result<&[u8], Error> {
+    pub fn deserialize_vector<'a>(&'a mut self, len_range: RangeInclusive<usize>) -> Result<&'a [u8], Error> {
         const U16_MIN: usize =  U8_MAX + 1;
         const U24_MIN: usize = U16_MAX + 1;
         const U32_MIN: usize = U24_MAX + 1;
@@ -151,7 +150,7 @@ impl<T: AsRef<[u8]>> Deserializer<T> {
         Ok(())
     }
 
-    pub fn deserialize_many(&mut self, len: usize) -> Result<&[u8], Error> {
+    pub fn deserialize_many<'a>(&'a mut self, len: usize) -> Result<&'a [u8], Error> {
         if len > self.remainder_len() {
             return Err(Error::new(ErrorKind::InternalError, "failed to fill whole buffer"));
         }
@@ -177,27 +176,31 @@ impl<T: AsRef<[u8]>> Deserializer<T> {
     }
 
     #[inline]
-    pub fn deserialize<V: Deserialize>(&mut self) -> Result<V, Error> {
+    pub fn deserialize<'a, V: Deserialize<'a>>(&'a mut self) -> Result<V, Error> {
         V::deserialize(self)
     }
 }
 
 
-impl Deserialize for () {
+impl<'de> Deserialize<'de> for () {
     fn deserialize<T: AsRef<[u8]>>(deserializer: &mut Deserializer<T>) -> Result<Self, Error> {
         Ok(())
     }
 }
+impl DeserializeOwned for () { }
+
 
 macro_rules! wrap_impl {
     ($ty:ident, $method:ident) => {
-        impl Deserialize for $ty {
+        impl<'de> Deserialize<'de> for $ty {
             #[inline]
             fn deserialize<T: AsRef<[u8]>>(deserializer: &mut Deserializer<T>) -> Result<Self, Error> {
                 let v = deserializer.$method()?;
                 Ok($ty(v))
             }
         }
+
+        impl DeserializeOwned for $ty { }
     }
 }
 
@@ -212,7 +215,7 @@ wrap_impl!(SupportedGroup,  deserialize_u16);
 wrap_impl!(SignatureScheme, deserialize_u16);
 
 
-impl Deserialize for ProtocolVersion {
+impl<'de> Deserialize<'de> for ProtocolVersion {
     #[inline]
     fn deserialize<T: AsRef<[u8]>>(deserializer: &mut Deserializer<T>) -> Result<Self, Error> {
         let bytes = deserializer.deserialize_many(2)?;
@@ -220,7 +223,9 @@ impl Deserialize for ProtocolVersion {
     }
 }
 
-impl Deserialize for Random {
+impl DeserializeOwned for ProtocolVersion { }
+
+impl<'de> Deserialize<'de> for Random {
     #[inline]
     fn deserialize<T: AsRef<[u8]>>(deserializer: &mut Deserializer<T>) -> Result<Self, Error> {
         let mut buf = [0u8; 32];
@@ -229,7 +234,9 @@ impl Deserialize for Random {
     }
 }
 
-impl Deserialize for SessionId {
+impl DeserializeOwned for Random { }
+
+impl<'de> Deserialize<'de> for SessionId {
     #[inline]
     fn deserialize<T: AsRef<[u8]>>(deserializer: &mut Deserializer<T>) -> Result<Self, Error> {
         let len = deserializer.deserialize_u8()? as usize;
@@ -248,3 +255,4 @@ impl Deserialize for SessionId {
     }
 }
 
+impl DeserializeOwned for SessionId { }

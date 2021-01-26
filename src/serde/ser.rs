@@ -84,7 +84,13 @@ impl<T: AsMut<[u8]> + AsRef<[u8]>> Serializer<T> {
     }
 
     #[inline]
-    fn serialize_len_value<F: FnOnce(&mut Serializer<T>) -> Result<(), Error>>(&mut self, num_len_octets: usize, min_len: usize, max_len: usize, serialize_fn: F) -> Result<(), Error> {
+    fn serialize_len_value<R, F: FnOnce(&mut Serializer<T>) -> Result<R, Error>>(
+        &mut self, 
+        num_len_octets: usize, 
+        min_len: usize, 
+        max_len: usize, 
+        serialize_fn: F
+    ) -> Result<R, Error> {
         if num_len_octets > self.remainder_len() {
             return Err(Error::new(ErrorKind::InternalError, "failed to write whole buffer"));
         }
@@ -94,7 +100,7 @@ impl<T: AsMut<[u8]> + AsRef<[u8]>> Serializer<T> {
         
         let start = self.pos;
 
-        serialize_fn(self)?;
+        let ret = serialize_fn(self)?;
 
         let end = self.pos;
 
@@ -104,7 +110,9 @@ impl<T: AsMut<[u8]> + AsRef<[u8]>> Serializer<T> {
         let len_pos = start - num_len_octets;
 
         if amt < min_len || amt > max_len {
-            return Err(Error::new(ErrorKind::InternalError, format!("the number of bytes of the vector is limited, The number of bytes must be within the range of {}..={}.", min_len, max_len)));
+            return Err(Error::new(ErrorKind::InternalError, 
+                format!("the number of bytes of the vector is limited, The number of bytes must be within the range of {}..={}.", 
+                    min_len, max_len)));
         }
 
         let len_octets = &(amt as u64).to_be_bytes()[core::mem::size_of::<u64>() - num_len_octets..];
@@ -113,13 +121,17 @@ impl<T: AsMut<[u8]> + AsRef<[u8]>> Serializer<T> {
         // NOTE: 返回填充 LEN 字段。
         buf[len_pos..len_pos + num_len_octets].copy_from_slice(len_octets);
 
-        Ok(())
+        Ok(ret)
     }
 
     // NOTE: <2..2^16-2>
     //       <1..2^8-1>
     //       <0..32>
-    pub fn serialize_vector<F: FnOnce(&mut Serializer<T>) -> Result<(), Error>>(&mut self, len_range: RangeInclusive<usize>, serialize_fn: F) -> Result<(), Error> {
+    pub fn serialize_vector<R, F: FnOnce(&mut Serializer<T>) -> Result<R, Error>>(
+        &mut self, 
+        len_range: RangeInclusive<usize>, 
+        serialize_fn: F
+    ) -> Result<R, Error> {
         const U16_MIN: usize =  U8_MAX + 1;
         const U24_MIN: usize = U16_MAX + 1;
         const U32_MIN: usize = U24_MAX + 1;
@@ -160,7 +172,10 @@ impl<T: AsMut<[u8]> + AsRef<[u8]>> Serializer<T> {
         Ok(())
     }
 
-    pub fn serialize_many_with<F: FnOnce(&mut Serializer<T>) -> Result<(), Error>>(&mut self, serialize_fn: F) -> Result<usize, Error> {
+    pub fn serialize_many_with<F: FnOnce(&mut Serializer<T>) -> Result<(), Error>>(
+        &mut self, 
+        serialize_fn: F
+    ) -> Result<usize, Error> {
         let start = self.pos;
         
         serialize_fn(self)?;
@@ -229,8 +244,12 @@ impl Serialize for SessionId {
 
 
 
-pub fn write_tls_plaintext_record<T: AsMut<[u8]> + AsRef<[u8]>, F: FnOnce(&mut Serializer<T>) -> Result<(), Error>>(serializer: &mut Serializer<T>, 
-    kind: ContentKind, version: ProtocolVersion, serialize_fn: F) -> Result<(), Error> {
+pub fn write_tls_plaintext_record<T: AsMut<[u8]> + AsRef<[u8]>, F: FnOnce(&mut Serializer<T>) -> Result<(), Error>>(
+    serializer: &mut Serializer<T>, 
+    kind: ContentKind, 
+    version: ProtocolVersion, 
+    serialize_fn: F
+) -> Result<(), Error> {
     // 5.1.  Record Layer
     // https://tools.ietf.org/html/rfc8446#section-5.1
     // struct {
@@ -245,7 +264,11 @@ pub fn write_tls_plaintext_record<T: AsMut<[u8]> + AsRef<[u8]>, F: FnOnce(&mut S
     serializer.serialize_vector(0..=u16::MAX as usize, serialize_fn)
 }
 
-pub fn write_extension<T: AsMut<[u8]> + AsRef<[u8]>, F: FnOnce(&mut Serializer<T>) -> Result<(), Error>>(serializer: &mut Serializer<T>, kind: ExtensionKind, serialize_fn: F) -> Result<(), Error> {
+pub fn write_extension<T: AsMut<[u8]> + AsRef<[u8]>, F: FnOnce(&mut Serializer<T>) -> Result<(), Error>>(
+    serializer: &mut Serializer<T>, 
+    kind: ExtensionKind, 
+    serialize_fn: F
+) -> Result<(), Error> {
     // B.3.1.  Key Exchange Messages
     // https://tools.ietf.org/html/rfc8446#appendix-B.3.1
     // struct {
@@ -261,7 +284,10 @@ pub fn write_extension<T: AsMut<[u8]> + AsRef<[u8]>, F: FnOnce(&mut Serializer<T
 }
 
 
-pub fn write_ext_supported_versions<T: AsMut<[u8]> + AsRef<[u8]>>(serializer: &mut Serializer<T>, supported_versions: &[ProtocolVersion]) -> Result<(), Error> {
+pub fn write_ext_supported_versions<T: AsMut<[u8]> + AsRef<[u8]>>(
+    serializer: &mut Serializer<T>, 
+    supported_versions: &[ProtocolVersion]
+) -> Result<(), Error> {
     // 4.2.1.  Supported Versions
     // https://tools.ietf.org/html/rfc8446#section-4.2.1
     // 
@@ -286,13 +312,19 @@ pub fn write_ext_supported_versions<T: AsMut<[u8]> + AsRef<[u8]>>(serializer: &m
     })
 }
 
-pub fn write_ext_selected_version<T: AsMut<[u8]> + AsRef<[u8]>>(serializer: &mut Serializer<T>, selected_version: ProtocolVersion) -> Result<(), Error> {
+pub fn write_ext_selected_version<T: AsMut<[u8]> + AsRef<[u8]>>(
+    serializer: &mut Serializer<T>, 
+    selected_version: ProtocolVersion
+) -> Result<(), Error> {
     write_extension(serializer, ExtensionKind::SUPPORTED_VERSIONS, |serializer| {
         serializer.serialize_slice(&selected_version.to_be_bytes())
     })
 }
 
-pub fn write_ext_server_names<S: AsRef<str>, T: AsMut<[u8]> + AsRef<[u8]>>(serializer: &mut Serializer<T>, server_names: &[S]) -> Result<(), Error> {
+pub fn write_ext_server_names<S: AsRef<str>, T: AsMut<[u8]> + AsRef<[u8]>>(
+    serializer: &mut Serializer<T>, 
+    server_names: &[S]
+) -> Result<(), Error> {
     // 3.  Server Name Indication
     // https://tools.ietf.org/html/rfc6066#section-3
     // 
@@ -329,7 +361,10 @@ pub fn write_ext_server_names<S: AsRef<str>, T: AsMut<[u8]> + AsRef<[u8]>>(seria
     })
 }
 
-pub fn write_ext_application_protos<B: AsRef<[u8]>, T: AsMut<[u8]> + AsRef<[u8]>>(serializer: &mut Serializer<T>, application_protos: &[B]) -> Result<(), Error> {
+pub fn write_ext_application_protos<B: AsRef<[u8]>, T: AsMut<[u8]> + AsRef<[u8]>>(
+    serializer: &mut Serializer<T>, 
+    application_protos: &[B]
+) -> Result<(), Error> {
     // 3.1.  The Application-Layer Protocol Negotiation Extension
     // https://tools.ietf.org/html/rfc7301#section-3.1
     // 
@@ -351,7 +386,10 @@ pub fn write_ext_application_protos<B: AsRef<[u8]>, T: AsMut<[u8]> + AsRef<[u8]>
     })
 }
 
-pub fn write_ext_selected_application_proto<B: AsRef<[u8]>, T: AsMut<[u8]> + AsRef<[u8]>>(serializer: &mut Serializer<T>, application_proto: B) -> Result<(), Error> {
+pub fn write_ext_selected_application_proto<B: AsRef<[u8]>, T: AsMut<[u8]> + AsRef<[u8]>>(
+    serializer: &mut Serializer<T>, 
+    application_proto: B
+) -> Result<(), Error> {
     write_extension(serializer, ExtensionKind::APPLICATION_LAYER_PROTOCOL_NEGOTIATION, |serializer| {
         serializer.serialize_vector(1..=255, |serializer| {
             serializer.serialize_slice(application_proto.as_ref())
@@ -359,7 +397,10 @@ pub fn write_ext_selected_application_proto<B: AsRef<[u8]>, T: AsMut<[u8]> + AsR
     })
 }
 
-pub fn write_ext_supported_groups<T: AsMut<[u8]> + AsRef<[u8]>>(serializer: &mut Serializer<T>, supported_groups: &[SupportedGroup]) -> Result<(), Error> {
+pub fn write_ext_supported_groups<T: AsMut<[u8]> + AsRef<[u8]>>(
+    serializer: &mut Serializer<T>, 
+    supported_groups: &[SupportedGroup]
+) -> Result<(), Error> {
     // 4.2.7.  Supported Groups
     // https://tools.ietf.org/html/rfc8446#section-4.2.7
     // 
@@ -392,7 +433,10 @@ pub fn write_ext_supported_groups<T: AsMut<[u8]> + AsRef<[u8]>>(serializer: &mut
     })
 }
 
-pub fn write_ext_signature_algorithms<T: AsMut<[u8]> + AsRef<[u8]>>(serializer: &mut Serializer<T>, signature_algorithms: &[SignatureScheme]) -> Result<(), Error> {
+pub fn write_ext_signature_algorithms<T: AsMut<[u8]> + AsRef<[u8]>>(
+    serializer: &mut Serializer<T>, 
+    signature_algorithms: &[SignatureScheme]
+) -> Result<(), Error> {
     // 4.2.3.  Signature Algorithms
     // https://tools.ietf.org/html/rfc8446#section-4.2.3
     // 
@@ -444,7 +488,10 @@ pub fn write_ext_signature_algorithms<T: AsMut<[u8]> + AsRef<[u8]>>(serializer: 
     })
 }
 
-pub fn write_ext_ec_point_foramts<T: AsMut<[u8]> + AsRef<[u8]>>(serializer: &mut Serializer<T>, ec_point_foramts: &[ECPointFormat]) -> Result<(), Error> {
+pub fn write_ext_ec_point_foramts<T: AsMut<[u8]> + AsRef<[u8]>>(
+    serializer: &mut Serializer<T>, 
+    ec_point_foramts: &[ECPointFormat]
+) -> Result<(), Error> {
     // 5.1.2.  Supported Point Formats Extension
     // https://tools.ietf.org/html/rfc8422#section-5.1.2
     // 
@@ -467,14 +514,20 @@ pub fn write_ext_ec_point_foramts<T: AsMut<[u8]> + AsRef<[u8]>>(serializer: &mut
     })
 }
 
-fn write_ext_key_share_entry<B: AsRef<[u8]>, T: AsMut<[u8]> + AsRef<[u8]>>(serializer: &mut Serializer<T>, key_share_entry: &KeyShareEntry<B>) -> Result<(), Error> {
+fn write_ext_key_share_entry<B: AsRef<[u8]>, T: AsMut<[u8]> + AsRef<[u8]>>(
+    serializer: &mut Serializer<T>, 
+    key_share_entry: &KeyShareEntry<B>
+) -> Result<(), Error> {
     serializer.serialize_slice(&key_share_entry.group.to_be_bytes())?;
     serializer.serialize_vector(1..=65535, |serializer| {
         serializer.serialize_slice(key_share_entry.key.as_ref())
     })
 }
 
-pub fn write_ext_key_shares<B: AsRef<[u8]>, T: AsMut<[u8]> + AsRef<[u8]>>(serializer: &mut Serializer<T>, key_shares: &[KeyShareEntry<B>]) -> Result<(), Error> {
+pub fn write_ext_key_shares<B: AsRef<[u8]>, T: AsMut<[u8]> + AsRef<[u8]>>(
+    serializer: &mut Serializer<T>, 
+    key_shares: &[KeyShareEntry<B>]
+) -> Result<(), Error> {
     // 4.2.8.  Key Share
     // https://tools.ietf.org/html/rfc8446#section-4.2.8
     // 
@@ -505,15 +558,20 @@ pub fn write_ext_key_shares<B: AsRef<[u8]>, T: AsMut<[u8]> + AsRef<[u8]>>(serial
     })
 }
 
-pub fn write_ext_key_share<B: AsRef<[u8]>, T: AsMut<[u8]> + AsRef<[u8]>>(serializer: &mut Serializer<T>, key_share: &KeyShareEntry<B>) -> Result<(), Error> {
+pub fn write_ext_key_share<B: AsRef<[u8]>, T: AsMut<[u8]> + AsRef<[u8]>>(
+    serializer: &mut Serializer<T>, 
+    key_share: &KeyShareEntry<B>
+) -> Result<(), Error> {
     write_extension(serializer, ExtensionKind::KEY_SHARE, |serializer| {
         write_ext_key_share_entry(serializer, key_share)
     })
 }
 
-
-
-pub fn write_handshake<T: AsMut<[u8]> + AsRef<[u8]>, F: FnOnce(&mut Serializer<T>) -> Result<(), Error>>(serializer: &mut Serializer<T>, kind: HandshakeKind, serialize_fn: F) -> Result<(), Error> {
+pub fn write_handshake<T: AsMut<[u8]> + AsRef<[u8]>, F: FnOnce(&mut Serializer<T>) -> Result<(), Error>>(
+    serializer: &mut Serializer<T>, 
+    kind: HandshakeKind, 
+    serialize_fn: F
+) -> Result<(), Error> {
     // B.3.  Handshake Protocol
     // https://tools.ietf.org/html/rfc8446#appendix-B.3
     // struct {
