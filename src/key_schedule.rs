@@ -28,8 +28,14 @@
 //              |                     = server_handshake_traffic_secret
 //              v
 //        Derive-Secret(., "derived", "")
-use crypto2::hash::{Sha224, Sha256, Sha384};
-use crypto2::kdf::{HkdfSha1, HkdfSha224, HkdfSha256, HkdfSha384, HkdfSha512};
+// 
+// 
+// 7.5.  Exporters
+// https://datatracker.ietf.org/doc/html/rfc8446#section-7.5
+//    TLS-Exporter(label, context_value, key_length) = 
+//          HKDF-Expand-Label(Derive-Secret(Secret, label, ""), "exporter", Hash(context_value), key_length)
+use crypto2::hash::{Sha256, Sha384};
+use crypto2::kdf::{HkdfSha256, HkdfSha384};
 
 
 /// TLSv1.3 Secret Generator
@@ -222,8 +228,8 @@ impl SecretGeneratorSha256 {
     // traffic keys have been computed, implementations SHOULD delete
     // client_/server_application_traffic_secret_N and its associated
     // traffic keys.
-    pub fn derive_application_traffic_secret_next(last_application_traffic_secret: &[u8]) -> [u8; HkdfSha256::TAG_LEN] {
-        let hkdf = HkdfSha256::from_prk(&last_application_traffic_secret);
+    pub fn derive_application_traffic_secret_next(last_application_traffic_secret: &[u8; HkdfSha256::TAG_LEN]) -> [u8; HkdfSha256::TAG_LEN] {
+        let hkdf = HkdfSha256::from_prk(last_application_traffic_secret);
         
         let mut okm = [0u8; Sha256::DIGEST_LEN];
         Self::hkdf_expand_label(&hkdf, b"traffic upd", b"", &mut okm);
