@@ -50,8 +50,9 @@ pub struct SecretGeneratorSha256 {
 }
 
 impl SecretGeneratorSha256 {
+    // HASER::DIGEST_LEN == HMAC::TAG_LEN == HKDF::TAG_LEN
     pub const OUTPUT_LEN: usize = HkdfSha256::TAG_LEN;
-
+    
     // PSK (a pre-shared key established externally or derived from the
     // resumption_master_secret value from a previous connection)
     pub fn new(psk: &[u8], ecdhe_shared_secret: &[u8]) -> Self {
@@ -174,7 +175,6 @@ impl SecretGeneratorSha256 {
         self.client_application_traffic_secret_last = Some(secret);
         secret
     }
-
     pub fn derive_client_application_traffic_secret_next(&mut self) -> [u8; HkdfSha256::TAG_LEN] {
         // application_traffic_secret_N+1 = HKDF-Expand-Label(application_traffic_secret_N, "traffic upd", "", Hash.length)
 
