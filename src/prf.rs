@@ -1,10 +1,6 @@
-// The Transport Layer Security (TLS) Protocol Version 1.1
-//     5. HMAC and the Pseudorandom Function
-//         https://datatracker.ietf.org/doc/html/rfc4346#section-5
-// 
 // The Transport Layer Security (TLS) Protocol Version 1.2
-//     5.  HMAC and the Pseudorandom Function
-//         https://datatracker.ietf.org/doc/html/rfc5246#section-5
+// 5.  HMAC and the Pseudorandom Function
+// https://datatracker.ietf.org/doc/html/rfc5246#section-5
 use crypto2::hash::{Sha224, Sha256, Sha384, Sha512};
 use crypto2::mac::{HmacSha224, HmacSha256, HmacSha384, HmacSha512};
 
